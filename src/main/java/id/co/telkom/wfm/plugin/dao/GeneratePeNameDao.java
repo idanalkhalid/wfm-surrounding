@@ -226,6 +226,7 @@ public class GeneratePeNameDao {
     }
 
     public JSONObject callGeneratePeName(String wonum, ListGenerateAttributes listGenerate) throws MalformedURLException, Throwable {
+        JSONObject msg = new JSONObject();
         try {
             JSONObject assetAttributes = getAssetattridType(wonum);
             String deviceType = assetAttributes.optString("DEVICETYPE", "null");
@@ -275,6 +276,12 @@ public class GeneratePeNameDao {
                 String manufactur = portArrayNode.get(0).get("manufacturer").asText();
                 String ipAddress = portArrayNode.get(0).get("ipAddress").asText();
                 String model = portArrayNode.get(0).get("model").asText();
+                
+                msg.put("COMMUNITY_TRANSIT", community);
+                msg.put("PE_NAME", name);
+                msg.put("PE_MANUFACTUR", manufactur);
+                msg.put("PE_IPADDRESS", ipAddress);
+                msg.put("PE_MODEL", model);
 
                 LogUtil.info(this.getClass().getName(), "COMMUNITY_TRANSIT : " + community);
                 LogUtil.info(this.getClass().getName(), "PE_NAME : " + name);
@@ -283,7 +290,7 @@ public class GeneratePeNameDao {
                 LogUtil.info(this.getClass().getName(), "PE_MODEL : " + model);
 
                 // Checking if detailactcode == Populate PE Port IP Transit -> update value COMMUNITY_TRANSIT
-                if (getDetailactcode(wonum).get("detailactcode").toString() == "Populate PE Port IP Transit") {
+                if (getDetailactcode(wonum).get("detailactcode").toString().equals("Populate PE Port IP Transit")) {
                     updateCommunityTransit(wonum, community);
                     LogUtil.info(this.getClass().getName(), "UPDATE COMMUNITY SUCCESSFULLY ");
                 }
@@ -292,15 +299,11 @@ public class GeneratePeNameDao {
 
                 // insert response data to table APP_FD_TK_DEVICEATTRIBUTE
                 updateAttributeValue(wonum, name, manufactur, ipAddress, model);
-//                insertToDeviceTable(wonum, "PE_NAME", "", name);
-//                insertToDeviceTable(wonum, "PE_MANUFACTUR", name, manufactur);
-//                insertToDeviceTable(wonum, "PE_IPADDRESS", name, ipAddress);
-//                insertToDeviceTable(wonum, "PE_MODEL", name, model);
             }
 
         } catch (Exception e) {
             LogUtil.info(this.getClass().getName(), "Trace error here :" + e.getMessage());
         }
-        return null;
+        return msg;
     }
 }

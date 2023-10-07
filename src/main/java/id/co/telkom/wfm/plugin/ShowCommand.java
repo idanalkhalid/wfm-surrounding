@@ -5,10 +5,9 @@
  */
 package id.co.telkom.wfm.plugin;
 
-import id.co.telkom.wfm.plugin.dao.GenerateUplinkPortDao;
-import id.co.telkom.wfm.plugin.dao.ValidateVrfDao;
+import id.co.telkom.wfm.plugin.dao.ShowCommandDao;
+import id.co.telkom.wfm.plugin.dao.ValidateDao;
 import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
-import id.co.telkom.wfm.plugin.util.ResponseAPI;
 import java.io.IOException;
 import java.util.Map;
 import javax.servlet.ServletException;
@@ -18,17 +17,15 @@ import org.joget.apps.form.model.Element;
 import org.joget.apps.form.model.FormData;
 import org.joget.commons.util.LogUtil;
 import org.joget.plugin.base.PluginWebSupport;
-import org.json.simple.JSONArray;
-import org.json.simple.JSONObject;
 
 /**
  *
  * @author ASUS
  */
-public class ValidateVrf extends Element implements PluginWebSupport {
+public class ShowCommand extends Element implements PluginWebSupport {
 
-    String pluginName = "Telkom New WFM - Generate Validate VRF - Web Service";
-
+    String pluginName = "Telkom New WFM - Show Command File - Web Service";
+    
     @Override
     public String renderTemplate(FormData fd, Map map) {
         return "";
@@ -41,7 +38,7 @@ public class ValidateVrf extends Element implements PluginWebSupport {
 
     @Override
     public String getVersion() {
-        return "7.0.0";
+        return "7.00";
     }
 
     @Override
@@ -66,35 +63,28 @@ public class ValidateVrf extends Element implements PluginWebSupport {
 
     @Override
     public void webService(HttpServletRequest hsr, HttpServletResponse hsr1) throws ServletException, IOException {
-
-        ValidateVrfDao dao = new ValidateVrfDao();
-        ResponseAPI responseTemplete = new ResponseAPI();
-
         //@@Start..
-        LogUtil.info(this.getClass().getName(), "############## START PROCESS VALIDATE VRF ###############");
-        ListGenerateAttributes listAttribute = new ListGenerateAttributes();
-        //@Authorization
+        LogUtil.info(getClass().getName(), "Start Process: Validate LME");
+        ShowCommandDao dao = new ShowCommandDao();
+        //  JSONObject res = new JSONObject();
+
         if ("GET".equals(hsr.getMethod())) {
             try {
+                org.json.simple.JSONObject res =  new org.json.simple.JSONObject();
                 if (hsr.getParameterMap().containsKey("wonum")) {
                     String wonum = hsr.getParameter("wonum");
-                    org.json.JSONObject validateVrf = dao.callUimaxValidateVrf(wonum, listAttribute);
-                    JSONObject res = new JSONObject();
-
-                    if (listAttribute.getStatusCode() == 404) {
-                        res.put("code", 422);
-                        res.put("data", validateVrf);
-                        res.writeJSONString(hsr1.getWriter());
-                    } else if (listAttribute.getStatusCode() == 200) {
+                     ListGenerateAttributes listAttribute = new ListGenerateAttributes();
+                     String dataRes = dao.getFileContent(wonum, listAttribute);
+                     
+                    if (listAttribute.getStatusCode() == 200) {
                         res.put("code", 200);
-                        res.put("data", validateVrf);
+                        res.put("message", dataRes);
                         res.writeJSONString(hsr1.getWriter());
                     } else {
                         res.put("code", 404);
-                        res.put("message", "Call Failed");
+                        res.put("message", dataRes);
                         res.writeJSONString(hsr1.getWriter());
-                        LogUtil.info(getClass().getName(), "Call Failed");
-                    }
+                    } 
                 }
             } catch (Exception e) {
                 LogUtil.error(getClassName(), e, "Trace Error Here : " + e.getMessage());
@@ -107,5 +97,5 @@ public class ValidateVrf extends Element implements PluginWebSupport {
             }
         }
     }
-
+    
 }

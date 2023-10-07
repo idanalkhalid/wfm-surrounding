@@ -7,6 +7,7 @@ package id.co.telkom.wfm.plugin.dao;
 
 import id.co.telkom.wfm.plugin.GenerateDownlinkPort;
 import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
+import id.co.telkom.wfm.plugin.util.CallUIM;
 import id.co.telkom.wfm.plugin.util.TimeUtil;
 import java.io.IOException;
 import java.io.InputStream;
@@ -40,7 +41,16 @@ public class GenerateDownlinkPortDao {
     public JSONObject getAssetattrid(String wonum) throws SQLException, JSONException {
         JSONObject resultObj = new JSONObject();
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String query = "SELECT c_assetattrid, c_value FROM app_fd_workorderspec WHERE c_wonum = ? AND c_assetattrid IN ('STP_NAME_ALN','STP_PORT_NAME_ALN','STP_PORT_ID', 'NTE_NAME', 'NTE_DOWNLINK_PORT','AN_STO')";
+        String query = "SELECT c_assetattrid, c_value "
+                + "FROM app_fd_workorderspec "
+                + "WHERE c_wonum = ? "
+                + "AND c_assetattrid IN ("
+                + "'STP_NAME',"
+                + "'STP_PORT_NAME',"
+                + "'STP_PORT_ID', "
+                + "'NTE_NAME', "
+                + "'NTE_DOWNLINK_PORT',"
+                + "'AN_STO')";
 
         try (Connection con = ds.getConnection();
                 PreparedStatement ps = con.prepareStatement(query)) {
@@ -103,32 +113,33 @@ public class GenerateDownlinkPortDao {
     }
 
     public JSONObject formatRequest(String wonum, ListGenerateAttributes listGenerate) throws SQLException, JSONException {
+        JSONObject result = new JSONObject();
         try {
-            String result = "";
+
             JSONObject assetAttributes = getAssetattrid(wonum);
 
             String nteName = assetAttributes.optString("NTE_NAME");
             String anSto = assetAttributes.optString("AN_STO", "null");
-
-            String stpName = assetAttributes.optString("STP_NAME_ALN", "null");
-            String stpPortName = assetAttributes.optString("STP_PORT_NAME_ALN", "null");
+            String stpName = assetAttributes.optString("STP_NAME", "null");
+            String stpPortName = assetAttributes.optString("STP_PORT_NAME", "null");
             String stpPortId = assetAttributes.optString("STP_PORT_ID", "null");
             String nteDownlinkPort = assetAttributes.optString("NTE_DOWNLINK_PORT", "null");
 
             if (nteName.isEmpty()) {
-                callGenerateDownlinkPort(wonum, "10", stpName, stpPortName, stpPortId, anSto, listGenerate);
+                result = callGenerateDownlinkPort(wonum, "10", stpName, stpPortName, stpPortId, anSto, listGenerate);
             } else {
-                callGenerateDownlinkPort(wonum, "10", nteName, "", nteDownlinkPort, anSto, listGenerate);
+                result = callGenerateDownlinkPort(wonum, "10", nteName, "", nteDownlinkPort, anSto, listGenerate);
                 LogUtil.info(getClass().getName(), "Message: " + "\n" + nteName + "\n" + nteDownlinkPort + "\n" + result);
             }
         } catch (Throwable ex) {
             Logger.getLogger(GenerateDownlinkPort.class.getName()).log(Level.SEVERE, null, ex);
         }
-        return null;
+        return result;
     }
 
     public JSONObject callGenerateDownlinkPort(String wonum, String bandwidth, String odpName, String downlinkPortName, String downlinkPortID, String sto, ListGenerateAttributes listGenerate) throws MalformedURLException, IOException, Throwable {
-        String msg = "";
+        JSONObject msg = new JSONObject();
+        CallUIM callUIM = new CallUIM();
         try {
             String request = "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:ent=\"http://xmlns.oracle.com/communications/inventory/webservice/enterpriseFeasibility\">\n"
                     + "   <soapenv:Header/>\n"
@@ -147,36 +158,7 @@ public class GenerateDownlinkPortDao {
                     + "   </soapenv:Body>\n"
                     + "</soapenv:Envelope>";
 
-            String urlres = "http://10.6.28.132:7001/EnterpriseFeasibilityUim/EnterpriseFeasibilityUimHTTP";
-            URL url = new URL(urlres);
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setDoOutput(true);
-            connection.setRequestMethod("POST");
-            // Set Headers
-            connection.setRequestProperty("Accept", "application/xml");
-            connection.setRequestProperty("Content-Type", "text/xml; charset=UTF-8");
-            try ( // Write XML
-                    OutputStream outputStream = connection.getOutputStream()) {
-                byte[] b = request.getBytes("UTF-8");
-                outputStream.write(b);
-                outputStream.flush();
-            }
-
-            StringBuilder response;
-            try ( // Read XML
-                    InputStream inputStream = connection.getInputStream()) {
-                byte[] res = new byte[2048];
-                int i = 0;
-                response = new StringBuilder();
-                while ((i = inputStream.read(res)) != -1) {
-                    response.append(new String(res, 0, i));
-                }
-            }
-            StringBuilder result = response;
-            org.json.JSONObject temp = XML.toJSONObject(result.toString());
-            System.out.println("temp " + temp.toString());
-            LogUtil.info(this.getClass().getName(), "INI REQUEST XML : " + request);
-            LogUtil.info(this.getClass().getName(), "INI RESPONSE : " + temp.toString());
+            JSONObject temp = callUIM.callUIM(request);
 
             //Parsing response data
             LogUtil.info(this.getClass().getName(), "############ Parsing Data Response ##############");
@@ -189,6 +171,11 @@ public class GenerateDownlinkPortDao {
             if (statusCode == 4001) {
                 LogUtil.info(this.getClass().getName(), "DownlinkPort Not found!");
                 listGenerate.setStatusCode(statusCode);
+                msg.put("message", "DownlinkPort Not Found!");
+                deleteTkDeviceattribute(wonum);
+                msg.put("Device", "None");
+                insertToDeviceTable(wonum, "AN_DOWNLINK_PORTNAME", "None", "None");
+                insertToDeviceTable(wonum, "AN_DOWNLINK_PORTID", "None", "None");
             } else if (statusCode == 4000) {
                 listGenerate.setStatusCode(statusCode);
                 JSONObject getDeviceInformation = device.getJSONObject("AccessDeviceInformation");
@@ -211,6 +198,12 @@ public class GenerateDownlinkPortDao {
                 deleteTkDeviceattribute(wonum);
                 updateAttributeValue(wonum, id, sTO, ipAddress, nmsIpaddress, name, manufacture);
 
+                msg.put("Manufacture", manufacture);
+                msg.put("Name", name);
+                msg.put("IPAddress", ipAddress);
+                msg.put("NMSIPAddress", nmsIpaddress);
+                msg.put("STO", sTO);
+                msg.put("ID", id);
                 Object downlinkPortObj = getDeviceInformation.get("DownlinkPort");
                 if (downlinkPortObj instanceof JSONObject) {
                     JSONObject downlinkPort = (JSONObject) downlinkPortObj;
@@ -224,9 +217,8 @@ public class GenerateDownlinkPortDao {
                     insertToDeviceTable(wonum, "AN_DOWNLINK_PORTNAME", downlinkPortName, downlinkportName);
                     insertToDeviceTable(wonum, "AN_DOWNLINK_PORTID", downlinkportName, downlinkPortId);
 
-                    msg = msg + "DownlinkPort: " + downlinkPort + "\n";
-                    msg = msg + "Name: " + downlinkportName + "\n";
-                    msg = msg + "Id: " + downlinkPortId + "\n";
+                    msg.put("DownlinkPortName", downlinkportName);
+                    msg.put("DownlinkPortID", downlinkPortId);
                 } else if (downlinkPortObj instanceof JSONArray) {
                     JSONArray downlinkPortArray = (JSONArray) downlinkPortObj;
 
@@ -236,12 +228,10 @@ public class GenerateDownlinkPortDao {
                         String downlinkportName = hasil.getString("name");
                         String downlinkPortId = hasil.getString("id");
 
-//                        msg = msg + "DownlinkPort: " + downlinkPort + "\n";
-                        msg = msg + "Name: " + downlinkportName + "\n";
-                        msg = msg + "Id: " + downlinkPortId + "\n";
+                        msg.put("Name", downlinkportName);
+                        msg.put("ID", downlinkPortId);
 
                         insertToDeviceTable(wonum, "AN_DOWNLINK_PORTNAME", downlinkPortName, downlinkportName);
-
                         insertToDeviceTable(wonum, "AN_DOWNLINK_PORTID", downlinkportName, downlinkPortId);
                     }
                 }
@@ -250,7 +240,7 @@ public class GenerateDownlinkPortDao {
         } catch (Exception e) {
             LogUtil.error(getClass().getName(), e, "Call Failed. No Device Found." + "\n" + e);
         }
-        return null;
+        return msg;
     }
 
     public boolean updateAttributeValue(String wonum, String deviceId, String sto, String ipaddress, String nmsipaddress, String name, String manufactur) {
@@ -294,71 +284,4 @@ public class GenerateDownlinkPortDao {
 
         return result;
     }
-
-//    public boolean updateAttributeValue(String wonum, String deviceId, String sto, String ipaddress, String nmsipaddress, String name, String manufactur) throws SQLException {
-//        boolean result = false;
-//        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-//        StringBuilder update = new StringBuilder();
-//        update.append("UPDATE APP_FD_WORKORDERSPEC ")
-//                .append("SET c_value = CASE c_assetattrid ")
-//                .append("WHEN 'AN_DEVICE_ID' THEN ? ")
-//                .append("WHEN 'AN_STO' THEN ? ")
-//                .append("WHEN 'AN_IPADDRESS' THEN ? ")
-//                .append("WHEN 'AN_NMSIPADDRESS' THEN ? ")
-//                .append("WHEN 'AN_NAME' THEN ? ")
-//                .append("WHEN 'AN_MANUFACTUR' THEN ? ")
-//                .append("ELSE 'Missing' END ")
-//                .append("WHERE c_wonum = ? ")
-//                .append("AND c_assetattrid IN ('AN_DEVICE_ID', 'AN_STO', 'AN_IPADDRESS', 'AN_NMSIPADDRESS', 'AN_NAME', 'AN_MANUFACTUR')");
-//        try {
-//            Connection con = ds.getConnection();
-//            try {
-//                PreparedStatement ps = con.prepareStatement(update.toString());
-//                try {
-//                    ps.setString(1, deviceId);
-//                    ps.setString(2, sto);
-//                    ps.setString(3, ipaddress);
-//                    ps.setString(4, nmsipaddress);
-//                    ps.setString(5, name);
-//                    ps.setString(6, manufactur);
-//                    ps.setString(7, wonum);
-//
-//                    int exe = ps.executeUpdate();
-//                    if (exe > 0) {
-//                        result = true;
-//                        LogUtil.info(getClass().getName(), "Downlinkport updated to " + wonum);
-//                    }
-//                    if (ps != null) {
-//                        ps.close();
-//                    }
-//                } catch (Throwable throwable) {
-//                    try {
-//                        if (ps != null) {
-//                            ps.close();
-//                        }
-//                    } catch (Throwable throwable1) {
-//                        throwable.addSuppressed(throwable1);
-//                    }
-//                    throw throwable;
-//                }
-//                if (con != null) {
-//                    con.close();
-//                }
-//            } catch (Throwable throwable) {
-//                try {
-//                    if (con != null) {
-//                        con.close();
-//                    }
-//                } catch (Throwable throwable1) {
-//                    throwable.addSuppressed(throwable1);
-//                }
-//                throw throwable;
-//            } finally {
-//                ds.getConnection().close();
-//            }
-//        } catch (SQLException e) {
-//            LogUtil.error(getClass().getName(), e, "Trace error here: " + e.getMessage());
-//        }
-//        return result;
-//    }
 }

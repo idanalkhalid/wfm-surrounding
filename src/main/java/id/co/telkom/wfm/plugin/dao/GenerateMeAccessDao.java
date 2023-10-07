@@ -34,7 +34,17 @@ public class GenerateMeAccessDao {
     public JSONObject getAssetattridType(String wonum) throws SQLException, JSONException {
         JSONObject resultObj = new JSONObject();
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String query = "SELECT c_assetattrid, c_value FROM app_fd_workorderspec WHERE c_wonum = ? AND c_assetattrid IN ('AN_NAME','AN_UPLINK_PORTNAME','DEVICELINK', 'LINK_TYPE', 'ME_IPADDRESS','ME_NAME')";
+        String query = "SELECT c_assetattrid, c_value "
+                + "FROM app_fd_workorderspec "
+                + "WHERE c_wonum = ? "
+                + "AND c_assetattrid IN ("
+                + "'AN_NAME',"
+                + "'AN_UPLINK_PORTNAME',"
+                + "'DEVICELINK', "
+                + "'LINK_TYPE',"
+                + "'ME_IPADDRESS',"
+                + "'ME_NAME',"
+                + "'NTE_TYPE')";
         try (Connection con = ds.getConnection();
                 PreparedStatement ps = con.prepareStatement(query)) {
             ps.setString(1, wonum);
@@ -77,8 +87,8 @@ public class GenerateMeAccessDao {
                     ps.setString(4, "-");
                     ps.setString(5, "-");
                     ps.setString(6, "-");
-                    ps.setString(7, "0");
-                    ps.setString(8, "0");
+                    ps.setInt(7, 0);
+                    ps.setInt(8, 0);
                     ps.setString(9, wonum);
 
                     int exe = ps.executeUpdate();
@@ -134,7 +144,7 @@ public class GenerateMeAccessDao {
                 .append("WHEN 'ME_PORTNAME' THEN ? ")
                 .append("ELSE 'Missing' END ")
                 .append("WHERE c_wonum = ? ")
-                .append("AND c_assetattrid IN ('ME_MANUFACTUR', 'ME_NAME', 'ME_IPADDRESS', , 'ME_PORT_MTU', 'ME_PORTNAME', 'ME_PORTID')");
+                .append("AND c_assetattrid IN ('ME_MANUFACTUR', 'ME_NAME', 'ME_IPADDRESS', 'ME_PORT_MTU', 'ME_PORTNAME', 'ME_PORTID')");
         try {
             Connection con = ds.getConnection();
             try {
@@ -187,22 +197,19 @@ public class GenerateMeAccessDao {
         return result;
     }
 
-    public JSONArray callGenerateMeAccess(String wonum, ListGenerateAttributes listGenerate) throws SQLException, JSONException {
+    public JSONObject callGenerateMeAccess(String wonum, ListGenerateAttributes listGenerate) throws SQLException, JSONException {
+        JSONObject msg = new JSONObject();
 
         JSONObject assetAttributes = getAssetattridType(wonum);
 
-//        String deviceName = getAssetattridType(wonum).get("AN_NAME").toString().replace("/", "%2F").replace(" ", "%20");
-//        String portname = getAssetattridType(wonum).get("AN_UPLINK_PORTNAME").toString().replace("/", "%2F").replace(" ", "%20");
         String deviceName = assetAttributes.optString("AN_NAME", "null").replace("/", "%2F").replace(" ", "%20");
         String portname = assetAttributes.optString("AN_UPLINK_PORTNAME", "null").replace("/", "%2F").replace(" ", "%20");
         String meIpAddress = assetAttributes.optString("ME_IPADDRESS", "null");
         String deviceLink = "";
         if (deviceLink == "") {
-//            deviceLink = getAssetattridType(wonum).get("DEVICELINK").toString();
             deviceLink = assetAttributes.optString("DEVICELINK", "null");
         }
         if (deviceLink == "") {
-//            deviceLink = getAssetattridType(wonum).get("LINK_TYPE").toString();
             deviceLink = assetAttributes.optString("LINK_TYPE", "null");
         }
 
@@ -213,9 +220,10 @@ public class GenerateMeAccessDao {
             URL getDeviceLinkPort = new URL(url);
             URL getDeviceLinkPortByIp = new URL(urlByIp);
 
-            String nteType = assetAttributes.optString("NTE_TYPE");
-            if (nteType != null) {
-                if (nteType == "DirectME" || nteType == "L2Switch") {
+            String nteType = assetAttributes.optString("NTE_TYPE", null);
+            LogUtil.info(getClass().getName(), "NTE_TYPE" + nteType);
+            if (!nteType.isEmpty()) {
+                if (nteType.equals("DirectME") || nteType.equals("L2Switch")) {
                     HttpURLConnection con = (HttpURLConnection) getDeviceLinkPortByIp.openConnection();
 
                     con.setRequestMethod("GET");
@@ -227,6 +235,7 @@ public class GenerateMeAccessDao {
                     if (responseCode == 400) {
                         LogUtil.info(this.getClass().getName(), "ME Service Not found!");
                         listGenerate.setStatusCode(responseCode);
+                        msg.put("Device", "None");
                     } else if (responseCode == 200) {
                         listGenerate.setStatusCode(responseCode);
                         BufferedReader in = new BufferedReader(
@@ -253,12 +262,10 @@ public class GenerateMeAccessDao {
                         LogUtil.info(this.getClass().getName(), "ME MANUFACTUR :" + manufactur);
                         LogUtil.info(this.getClass().getName(), "ME NAME :" + name);
                         LogUtil.info(this.getClass().getName(), "ME IPADDRESS :" + ipAddress);
-                        LogUtil.info(this.getClass().getName(), "AN MANUFACTUR :" + "-");
-                        LogUtil.info(this.getClass().getName(), "AN NAME :" + "-");
-                        LogUtil.info(this.getClass().getName(), "AN IPADDRESS :" + "-");
-                        LogUtil.info(this.getClass().getName(), "ME PORTNAME :" + "readonly 0");
-                        LogUtil.info(this.getClass().getName(), "ME PORTID:" + "readonly 0");
 
+                        msg.put("MEManufactur", manufactur);
+                        msg.put("MEName", name);
+                        msg.put("MEIPAddress", ipAddress);
                         // Update Data ME ACCESS BY IPADDRESS
                         updateDeviceLinkPortByIp(wonum, manufactur, name, ipAddress);
                     }
@@ -308,6 +315,13 @@ public class GenerateMeAccessDao {
                         LogUtil.info(this.getClass().getName(), "ME_PORTID : " + key);
                         LogUtil.info(this.getClass().getName(), "ME_PORTNAME : " + portName);
 
+                        msg.put("MEManufactur", manufactur);
+                        msg.put("MEName", name);
+                        msg.put("MEIPAddress", ipAddress);
+                        msg.put("MEPortMTU", mtu);
+                        msg.put("MEPortId", key);
+                        msg.put("MEPortName", portName);
+
                         // Update STO, REGION, WITEL, DATEL from table WORKORDERSPEC
                         updateDeviceLinkPort(wonum, manufactur, name, ipAddress, mtu, key, portName);
                     }
@@ -317,6 +331,6 @@ public class GenerateMeAccessDao {
         } catch (Exception e) {
             LogUtil.info(this.getClass().getName(), "Trace error here :" + e.getMessage());
         }
-        return null;
+        return msg;
     }
 }

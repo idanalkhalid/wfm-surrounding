@@ -27,6 +27,9 @@ public class Activator implements BundleActivator {
         registrationList.add(context.registerService(GenerateDownlinkPort.class.getName(), new GenerateDownlinkPort(), null));
         registrationList.add(context.registerService(GenerateIpV4.class.getName(), new GenerateIpV4(), null));
         registrationList.add(context.registerService(GenerateStpNetLoc.class.getName(), new GenerateStpNetLoc(), null));
+        registrationList.add(context.registerService(CheckACS.class.getName(), new CheckACS(), null));
+        registrationList.add(context.registerService(Validate.class.getName(), new Validate(), null));
+        registrationList.add(context.registerService(ShowCommand.class.getName(), new ShowCommand(), null));
         //Register plugin here
         //registrationList.add(context.registerService(MyPlugin.class.getName(), new MyPlugin(), null));
     }

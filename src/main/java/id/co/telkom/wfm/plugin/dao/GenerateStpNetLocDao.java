@@ -6,24 +6,14 @@
 package id.co.telkom.wfm.plugin.dao;
 
 import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import id.co.telkom.wfm.plugin.util.CallUIM;
+import java.io.*;
+import java.net.*;
+import java.sql.*;
 import javax.sql.DataSource;
 import org.joget.apps.app.service.AppUtil;
-import org.joget.commons.util.LogUtil;
-import org.joget.commons.util.UuidGenerator;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-import org.json.XML;
+import org.joget.commons.util.*;
+import org.json.*;
 
 /**
  *
@@ -50,69 +40,22 @@ public class GenerateStpNetLocDao {
             LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
         }
         return resultObj;
-
     }
 
     // ==========================================
     // Call API Surrounding Generate STP Net Loc
     //===========================================
     public JSONObject callGenerateStpNetLoc(String wonum, ListGenerateAttributes listGenerate) throws JSONException, IOException, MalformedURLException, Exception, Throwable {
-        // Temp response data
-//        JSONObject getResponse = new JSONObject();
-
-        // Request Structure
+        CallUIM callUIM = new CallUIM();
+        JSONObject msg = new JSONObject();
         try {
-            String latitude = getAssetattrid(wonum).get("LATITUDE").toString();
-            String longitude = getAssetattrid(wonum).get("LONGITUDE").toString();
-            LogUtil.info(this.getClass().getName(), "Latitude : " + latitude + "Longitude : " + longitude);
+            JSONObject assetattr = getAssetattrid(wonum);
+            String latitude = assetattr.optString("LATITUDE", null);
+            String longitude = assetattr.optString("LONGITUDE", null);
 
-            String request = "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:ent=\"http://xmlns.oracle.com/communications/inventory/webservice/enterpriseFeasibility\">\n"
-                    + "   <soapenv:Header/>\n"
-                    + "   <soapenv:Body>\n"
-                    + "      <ent:findDeviceByCriteriaRequest>\n"
-                    + "       <!--Optional:-->\n"
-                    + "         <ServiceLocation>\n"
-                    + "            <!--Optional:-->\n"
-                    + "            <latitude>" + latitude + "</latitude>\n"
-                    + "            <longitude>" + longitude + "</longitude>\n"
-                    + "         </ServiceLocation>\n"
-                    + "         <DeviceInfo>\n"
-                    + "            <role>STP</role>\n"
-                    + "            <!--Optional:-->\n"
-                    + "            <detail>false</detail>\n"
-                    + "         </DeviceInfo>\n"
-                    + "      </ent:findDeviceByCriteriaRequest>\n"
-                    + "   </soapenv:Body>\n"
-                    + "</soapenv:Envelope>";
-            String urlres = "http://10.6.28.132:7001/EnterpriseFeasibilityUim/EnterpriseFeasibilityUimHTTP";
-            URL url = new URL(urlres);
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setDoOutput(true);
-            connection.setRequestMethod("POST");
-            // Set Headers
-            connection.setRequestProperty("Accept", "application/xml");
-            connection.setRequestProperty("Content-Type", "text/xml; charset=UTF-8");
-            try ( // Write XML
-                    OutputStream outputStream = connection.getOutputStream()) {
-                byte[] b = request.getBytes("UTF-8");
-                outputStream.write(b);
-                outputStream.flush();
-            }
+            String request = createRequest(latitude, longitude);
 
-            StringBuilder response;
-            try ( // Read XML
-                    InputStream inputStream = connection.getInputStream()) {
-                byte[] res = new byte[2048];
-                int i = 0;
-                response = new StringBuilder();
-                while ((i = inputStream.read(res)) != -1) {
-                    response.append(new String(res, 0, i));
-                }
-            }
-            StringBuilder result = response;
-            JSONObject temp = XML.toJSONObject(result.toString());
-            System.out.println("temp " + temp.toString());
-            LogUtil.info(this.getClass().getName(), "INI RESPONSE : " + temp.toString());
+            org.json.JSONObject temp = callUIM.callUIM(request);
 
             // Parsing response data
             LogUtil.info(this.getClass().getName(), "############ Parsing Data Response ##############");
@@ -123,12 +66,10 @@ public class GenerateStpNetLocDao {
 //            listAttribute.setStatusCodeTest(statusCode);
             listGenerate.setStatusCode(statusCode);
             LogUtil.info(this.getClass().getName(), "Response Status : " + statusCode);
-            LogUtil.info(getClass().getName(), "Status CodeTest: " + listGenerate.getStatusCode());
             if (statusCode == 4001) {
                 LogUtil.info(this.getClass().getName(), "No Device found.");
-
-                LogUtil.info(getClass().getName(), "Status Code: " + listGenerate.getStatusCode());
                 listGenerate.setStatusCode(statusCode);
+                msg.put("Device", "None");
             } else if (statusCode == 4000) {
                 listGenerate.setStatusCode(statusCode);
                 // Clear data
@@ -138,9 +79,11 @@ public class GenerateStpNetLocDao {
                 Object deviceInfoObj = device.get("DeviceInfo");
                 if (deviceInfoObj instanceof JSONObject) {
                     JSONObject deviceInfo = (JSONObject) deviceInfoObj;
-                    LogUtil.info(this.getClass().getName(), "DeviceInfo JSONObject :" + deviceInfo);
+//                    LogUtil.info(this.getClass().getName(), "DeviceInfo JSONObject :" + deviceInfo);
                     String name = deviceInfo.getString("name");
                     String type = deviceInfo.getString("networkLocation");
+                    msg.put("Name", name);
+                    msg.put("Type", type);
 
                     LogUtil.info(this.getClass().getName(), "Name : " + name + "Type : " + type);
                     insertToDeviceTable(wonum, type, name);
@@ -150,16 +93,18 @@ public class GenerateStpNetLocDao {
                         JSONObject data = deviceInfo.getJSONObject(i);
                         String name = data.getString("name");
                         String type = data.getString("networkLocation");
+                        msg.put("Name", name);
+                        msg.put("Type", type);
 
                         LogUtil.info(this.getClass().getName(), "Name : " + name + "Type : " + type);
                         insertToDeviceTable(wonum, type, name);
                     }
-                }     
+                }
             }
         } catch (Exception e) {
             LogUtil.error(getClass().getName(), e, "Call Failed." + e);
         }
-        return null;
+        return msg;
     }
 
     public String deleteTkDeviceattribute(String wonum) throws SQLException {
@@ -167,8 +112,7 @@ public class GenerateStpNetLocDao {
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
         String delete = "DELETE FROM app_fd_tk_deviceattribute WHERE c_ref_num = ?";
         try (Connection con = ds.getConnection();
-                PreparedStatement ps = con.prepareStatement(delete); //                PreparedStatement psDel = con.prepareStatement(delete);
-                ) {
+                PreparedStatement ps = con.prepareStatement(delete)) {
             ps.setString(1, wonum);
             ResultSet rs = ps.executeQuery();
 
@@ -211,5 +155,27 @@ public class GenerateStpNetLocDao {
         } finally {
             ds.getConnection().close();
         }
+    }
+
+    public String createRequest(String latitude, String longitude) {
+        String request = "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:ent=\"http://xmlns.oracle.com/communications/inventory/webservice/enterpriseFeasibility\">\n"
+                + "   <soapenv:Header/>\n"
+                + "   <soapenv:Body>\n"
+                + "      <ent:findDeviceByCriteriaRequest>\n"
+                + "       <!--Optional:-->\n"
+                + "         <ServiceLocation>\n"
+                + "            <!--Optional:-->\n"
+                + "            <latitude>" + latitude + "</latitude>\n"
+                + "            <longitude>" + longitude + "</longitude>\n"
+                + "         </ServiceLocation>\n"
+                + "         <DeviceInfo>\n"
+                + "            <role>STP</role>\n"
+                + "            <!--Optional:-->\n"
+                + "            <detail>false</detail>\n"
+                + "         </DeviceInfo>\n"
+                + "      </ent:findDeviceByCriteriaRequest>\n"
+                + "   </soapenv:Body>\n"
+                + "</soapenv:Envelope>";
+        return request;
     }
 }

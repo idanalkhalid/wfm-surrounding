@@ -8,6 +8,7 @@ package id.co.telkom.wfm.plugin;
 import id.co.telkom.wfm.plugin.dao.GenerateStpNetLocDao;
 import id.co.telkom.wfm.plugin.model.ListAttributes;
 import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
+import id.co.telkom.wfm.plugin.util.ResponseAPI;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -73,6 +74,7 @@ public class GenerateStpNetLoc extends Element implements PluginWebSupport {
     @Override
     public void webService(HttpServletRequest hsr, HttpServletResponse hsr1) throws ServletException, IOException, MalformedURLException {
         GenerateStpNetLocDao dao = new GenerateStpNetLocDao();
+        ResponseAPI responseTemplete = new ResponseAPI();
 
         //@@Start..
         LogUtil.info(this.getClass().getName(), "############## START PROCESS GENERATE STP NETWORK LOCATION ###############");
@@ -102,32 +104,28 @@ public class GenerateStpNetLoc extends Element implements PluginWebSupport {
                 String wonum = data_obj.get("wonum").toString();
 
                 try {
-                    // dao.callGenerateStpNetLoc(wonum, latitude, longitude);
                     LogUtil.info(getClassName(), "Call Generate STP Net Loc");
-                    
+                    JSONObject res = new JSONObject();
                     ListGenerateAttributes listAttribute = new ListGenerateAttributes();
-                    dao.callGenerateStpNetLoc(wonum, listAttribute);
-                    
+                    org.json.JSONObject generateStpNetLoc = dao.callGenerateStpNetLoc(wonum, listAttribute);
+                    LogUtil.info(getClassName(), "Status Code Loc: " + generateStpNetLoc);
 
-                    LogUtil.info(getClassName(), "Status Code Loc: " + listAttribute.getStatusCode());
                     if (listAttribute.getStatusCode() == 4001) {
-                        LogUtil.info(getClassName(), "Status Code: " + listAttribute.getStatusCode());
-
-                        JSONObject res1 = new JSONObject();
-                        res1.put("code", 4001);
-                        res1.put("message", "No Device found!.");
-                        res1.writeJSONString(hsr1.getWriter());
-                        hsr1.setStatus(404);
-                    } else if (listAttribute.getStatusCode() == 4000) {
-                        LogUtil.info(getClassName(), "Status Code: " + listAttribute.getStatusCode());
-
-                        JSONObject res = new JSONObject();
-                        res.put("code", 4000);
-                        res.put("message", "update data successfully");
+                        res.put("code", 422);
+                        res.put("message", "Device Not Found!");
+                        res.put("data", generateStpNetLoc);
                         res.writeJSONString(hsr1.getWriter());
-                        hsr1.setStatus(200);
+                        LogUtil.info(getClassName(), "Status Code: " + listAttribute.getStatusCode());
+                    } else if (listAttribute.getStatusCode() == 4000) {
+                        res.put("code", 200);
+                        res.put("message", "Device Found");
+                        res.put("data", generateStpNetLoc);
+                        res.writeJSONString(hsr1.getWriter());
+                        LogUtil.info(getClassName(), "Status Code: " + listAttribute.getStatusCode());
                     } else {
-                        LogUtil.info(getClass().getName(), "Call Failed");
+                        String message = "Call Failed";
+                        res = responseTemplete.getResponse(message, 404);
+                        res.writeJSONString(hsr1.getWriter());
                     }
                 } catch (Exception ex) {
                     Logger.getLogger(GenerateStpNetLoc.class.getName()).log(Level.SEVERE, null, ex);

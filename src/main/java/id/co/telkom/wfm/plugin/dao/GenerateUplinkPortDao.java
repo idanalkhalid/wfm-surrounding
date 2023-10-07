@@ -77,7 +77,7 @@ public class GenerateUplinkPortDao {
         try {
             LogUtil.info(this.getClass().getName(), "\nSending 'GET' request to URL : " + wonum);
 
-            String url = "https://api-emas.telkom.co.id:8443/api/device/ports?" + "deviceName=" + getAssetattrid(wonum).get("AN_NAME").toString() + "&portPurpose=TRUNK&portStatus=ACTIVE";
+            String url = "https://api-emas.telkom.co.id:8443/api/device/ports?" + "deviceName=" + getAssetattrid(wonum).get("AN_NAME").toString().replace(" ", "%20") + "&portPurpose=TRUNK&portStatus=ACTIVE";
             URL obj = new URL(url);
             HttpURLConnection con = (HttpURLConnection) obj.openConnection();
 

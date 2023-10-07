@@ -8,6 +8,7 @@ package id.co.telkom.wfm.plugin;
 import id.co.telkom.wfm.plugin.dao.GenerateMeAccessDao;
 import id.co.telkom.wfm.plugin.dao.GeneratePeNameDao;
 import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
+import id.co.telkom.wfm.plugin.util.ResponseAPI;
 import java.io.IOException;
 import java.util.Map;
 import java.util.logging.Level;
@@ -69,32 +70,34 @@ public class GeneratePeName extends Element implements PluginWebSupport {
         //@@Start..
         LogUtil.info(getClass().getName(), "Start Process: Generate ME Service");
         ListGenerateAttributes listAttribute = new ListGenerateAttributes();
-
+        GeneratePeNameDao dao = new GeneratePeNameDao();
+        JSONObject res = new JSONObject();
+        
         //@Authorization
         if ("GET".equals(hsr.getMethod())) {
             try {
                 LogUtil.info(getClassName(), "Call Generate PE Name");
 
-                GeneratePeNameDao dao = new GeneratePeNameDao();
-
                 if (hsr.getParameterMap().containsKey("wonum")) {
                     String wonum = hsr.getParameter("wonum");
-                    dao.callGeneratePeName(wonum, listAttribute);
-                    
-                    if (listAttribute.getStatusCode() == 404) {
-                        LogUtil.info(getClassName(), "Status Code: " + listAttribute.getStatusCode());
+                    org.json.JSONObject generatePeName = dao.callGeneratePeName(wonum, listAttribute);
 
-                        JSONObject res1 = new JSONObject();
-                        res1.put("code", 4001);
-                        res1.put("message", "No PE Name found!.");
-                        res1.writeJSONString(hsr1.getWriter());
+                    if (listAttribute.getStatusCode() == 404) {
+                        res.put("code", 422);
+                        res.put("message", "No PE Name found!");
+                        res.put("data", generatePeName);
+                        res.writeJSONString(hsr1.getWriter());
+                        LogUtil.info(getClassName(), "Status Code: " + listAttribute.getStatusCode());
                     } else if (listAttribute.getStatusCode() == 200) {
-                        JSONObject res = new JSONObject();
-                        res.put("code", 4000);
-                        res.put("message", "update data successfully");
+                        res.put("code", 200);
+                        res.put("message", "PE Name Found");
+                        res.put("data", generatePeName);
                         res.writeJSONString(hsr1.getWriter());
                     } else {
                         LogUtil.info(getClass().getName(), "Call Failed");
+                        res.put("code", 404);
+                        res.put("message", "Call API is Failed");
+                        res.writeJSONString(hsr1.getWriter());
                     }
                 }
             } catch (Exception e) {

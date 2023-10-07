@@ -72,22 +72,20 @@ public class ValidateSto extends Element implements PluginWebSupport {
             try {
                 ValidateStoDao dao = new ValidateStoDao();
 
+                JSONObject res =  new JSONObject();
                 if (hsr.getParameterMap().containsKey("wonum")) {
                     String wonum = hsr.getParameter("wonum");
-//                    String lon = hsr.getParameter("lon");
-//                    String serviceType = hsr.getParameter("serviceType");
-                    dao.callUimaxStoValidation(wonum, listAttribute);
+                    
+                    org.json.JSONObject validateSTO = dao.callUimaxStoValidation(wonum, listAttribute);
                     if (listAttribute.getStatusCode() == 404) {
-                        LogUtil.info(getClassName(), "Status Code: " + listAttribute.getStatusCode());
-
-                        JSONObject res1 = new JSONObject();
-                        res1.put("code", 404);
-                        res1.put("message", "No PE Name found!.");
-                        res1.writeJSONString(hsr1.getWriter());
+                        res.put("code", 422);
+                        res.put("message", "STO Not Found!");
+                        res.put("data", validateSTO);
+                        res.writeJSONString(hsr1.getWriter());
                     } else if (listAttribute.getStatusCode() == 200) {
-                        JSONObject res = new JSONObject();
-                        res.put("code", 200);
-                        res.put("message", "update data successfully");
+                        res.put("code", 422);
+                        res.put("message", "STO Found!");
+                        res.put("data", validateSTO);
                         res.writeJSONString(hsr1.getWriter());
                     } else {
                         LogUtil.info(getClass().getName(), "Call Failed");

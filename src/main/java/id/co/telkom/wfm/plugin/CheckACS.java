@@ -5,10 +5,7 @@
  */
 package id.co.telkom.wfm.plugin;
 
-import id.co.telkom.wfm.plugin.dao.GenerateUplinkPortDao;
-import id.co.telkom.wfm.plugin.dao.ValidateVrfDao;
-import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
-import id.co.telkom.wfm.plugin.util.ResponseAPI;
+import id.co.telkom.wfm.plugin.dao.CheckACSDao;
 import java.io.IOException;
 import java.util.Map;
 import javax.servlet.ServletException;
@@ -18,16 +15,14 @@ import org.joget.apps.form.model.Element;
 import org.joget.apps.form.model.FormData;
 import org.joget.commons.util.LogUtil;
 import org.joget.plugin.base.PluginWebSupport;
-import org.json.simple.JSONArray;
-import org.json.simple.JSONObject;
 
 /**
  *
  * @author ASUS
  */
-public class ValidateVrf extends Element implements PluginWebSupport {
+public class CheckACS extends Element implements PluginWebSupport {
 
-    String pluginName = "Telkom New WFM - Generate Validate VRF - Web Service";
+    String pluginName = "Telkom New WFM - Check ACS - Web Service";
 
     @Override
     public String renderTemplate(FormData fd, Map map) {
@@ -41,7 +36,7 @@ public class ValidateVrf extends Element implements PluginWebSupport {
 
     @Override
     public String getVersion() {
-        return "7.0.0";
+        return "7.00";
     }
 
     @Override
@@ -66,35 +61,19 @@ public class ValidateVrf extends Element implements PluginWebSupport {
 
     @Override
     public void webService(HttpServletRequest hsr, HttpServletResponse hsr1) throws ServletException, IOException {
-
-        ValidateVrfDao dao = new ValidateVrfDao();
-        ResponseAPI responseTemplete = new ResponseAPI();
-
+        CheckACSDao dao = new CheckACSDao();
         //@@Start..
-        LogUtil.info(this.getClass().getName(), "############## START PROCESS VALIDATE VRF ###############");
-        ListGenerateAttributes listAttribute = new ListGenerateAttributes();
+        LogUtil.info(getClass().getName(), "Start Process: Update Task Status");
         //@Authorization
-        if ("GET".equals(hsr.getMethod())) {
+        if ("POST".equals(hsr.getMethod())) {
             try {
+                org.json.simple.JSONObject res = new org.json.simple.JSONObject();
                 if (hsr.getParameterMap().containsKey("wonum")) {
                     String wonum = hsr.getParameter("wonum");
-                    org.json.JSONObject validateVrf = dao.callUimaxValidateVrf(wonum, listAttribute);
-                    JSONObject res = new JSONObject();
-
-                    if (listAttribute.getStatusCode() == 404) {
-                        res.put("code", 422);
-                        res.put("data", validateVrf);
-                        res.writeJSONString(hsr1.getWriter());
-                    } else if (listAttribute.getStatusCode() == 200) {
-                        res.put("code", 200);
-                        res.put("data", validateVrf);
-                        res.writeJSONString(hsr1.getWriter());
-                    } else {
-                        res.put("code", 404);
-                        res.put("message", "Call Failed");
-                        res.writeJSONString(hsr1.getWriter());
-                        LogUtil.info(getClass().getName(), "Call Failed");
-                    }
+                    org.json.JSONObject response = dao.checkACS(wonum);
+                    LogUtil.info(getClassName(), "Response : " + response);
+                    res.put("output", response);
+                    res.writeJSONString(hsr1.getWriter());
                 }
             } catch (Exception e) {
                 LogUtil.error(getClassName(), e, "Trace Error Here : " + e.getMessage());

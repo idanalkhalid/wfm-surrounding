@@ -7,6 +7,7 @@ package id.co.telkom.wfm.plugin;
 
 import id.co.telkom.wfm.plugin.dao.GenerateMeAccessDao;
 import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
+import id.co.telkom.wfm.plugin.util.ResponseAPI;
 import java.io.IOException;
 import java.util.Map;
 import javax.servlet.ServletException;
@@ -71,25 +72,32 @@ public class GenerateMeAccess extends Element implements PluginWebSupport {
         //@Authorization
         if ("GET".equals(hsr.getMethod())) {
             try {
+                JSONObject res = new JSONObject();
                 GenerateMeAccessDao dao = new GenerateMeAccessDao();
+                ResponseAPI responseTemplete = new ResponseAPI();
 
                 if (hsr.getParameterMap().containsKey("wonum")) {
                     String wonum = hsr.getParameter("wonum");
-                    dao.callGenerateMeAccess(wonum, listAttribute);
+                    org.json.JSONObject MeAccess = dao.callGenerateMeAccess(wonum, listAttribute);
                     if (listAttribute.getStatusCode() == 404) {
-                        JSONObject res1 = new JSONObject();
-                        res1.put("code", 404);
-                        res1.put("message", "No Service found!.");
-                        res1.writeJSONString(hsr1.getWriter());
-                        hsr1.setStatus(404);
-                    } else if (listAttribute.getStatusCode() == 200) {
-                        JSONObject res = new JSONObject();
-                        res.put("code", 200);
-                        res.put("message", "update data successfully");
+//                        String message = "No Service found!";
+//                        JSONObject res = responseTemplete.getResponse(message, 422);
+                        res.put("code", 422);
+                        res.put("message", "No Service found!");
+                        res.put("data", MeAccess);
                         res.writeJSONString(hsr1.getWriter());
-                        hsr1.setStatus(200);
+                    } else if (listAttribute.getStatusCode() == 200) {
+//                        String message = "update data successfully";
+//                        JSONObject res = responseTemplete.getResponse(message, 200);
+                        res.put("code", 200);
+                        res.put("message", "Service Found");
+                        res.put("data", MeAccess);
+                        res.writeJSONString(hsr1.getWriter());
                     } else {
-                        LogUtil.info(getClassName(), "Call API is Failed : ");
+//                        String message = "Call API is Failed";
+                        res.put("code", 500);
+                        res.put("message", "Call API is Failed");
+                        res.writeJSONString(hsr1.getWriter());
                     }
                 }
             } catch (Exception e) {

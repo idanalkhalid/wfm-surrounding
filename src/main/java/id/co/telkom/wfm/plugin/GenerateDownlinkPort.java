@@ -7,19 +7,15 @@ package id.co.telkom.wfm.plugin;
 
 import id.co.telkom.wfm.plugin.dao.GenerateDownlinkPortDao;
 import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
-import java.io.BufferedReader;
-import java.io.IOException;
+import id.co.telkom.wfm.plugin.util.ResponseAPI;
+import java.io.*;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.logging.*;
 import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import org.joget.apps.form.model.Element;
-import org.joget.apps.form.model.FormData;
+import javax.servlet.http.*;
+import org.joget.apps.form.model.*;
 import org.joget.commons.util.LogUtil;
 import org.joget.plugin.base.PluginWebSupport;
-import org.json.JSONException;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 
@@ -73,10 +69,13 @@ public class GenerateDownlinkPort extends Element implements PluginWebSupport {
         LogUtil.info(this.getClass().getName(), "############## START PROCESS GENERATE DOWNLINK PORT ###############");
 
         GenerateDownlinkPortDao dao = new GenerateDownlinkPortDao();
+        ResponseAPI responseTemplete = new ResponseAPI();
 
         //@Authorization
         if ("POST".equals(hsr.getMethod())) {
             try {
+//                String downlinkPort = "";
+
                 //@Parsing message
                 //HttpServletRequest get JSON Post data
                 StringBuffer jb = new StringBuffer();
@@ -92,28 +91,28 @@ public class GenerateDownlinkPort extends Element implements PluginWebSupport {
                 LogUtil.info(getClassName(), "Request Body: " + jb.toString());
 
                 //Parse JSON String to JSON Object
-                String bodyParam = jb.toString(); //String
+                String bodyParam = jb.toString();
                 JSONParser parser = new JSONParser();
-                JSONObject data_obj = (JSONObject) parser.parse(bodyParam);//JSON Object
-                
+                JSONObject data_obj = (JSONObject) parser.parse(bodyParam);
+
                 //Store param
                 String wonum = data_obj.get("wonum").toString();
 
                 ListGenerateAttributes listAttribute = new ListGenerateAttributes();
-                LogUtil.info(pluginName, "List Attr :"+listAttribute.toString());
-                dao.formatRequest(wonum, listAttribute);
+                LogUtil.info(pluginName, "List Attr :" + listAttribute.toString());
+                org.json.JSONObject downlinkPort = dao.formatRequest(wonum, listAttribute);
                 if (listAttribute.getStatusCode() == 4001) {
-                    JSONObject res1 = new JSONObject();
-                    res1.put("code", 204);
-                    res1.put("message", "No Service found!.");
-                    res1.writeJSONString(hsr1.getWriter());
-                    hsr1.setStatus(404);
+                    JSONObject res = new JSONObject();
+                    res.put("code", 422);
+                    res.put("message", "Device Not Found!");
+                    res.put("data", downlinkPort);
+                    res.writeJSONString(hsr1.getWriter());
                 } else if (listAttribute.getStatusCode() == 4000) {
                     JSONObject res = new JSONObject();
                     res.put("code", 200);
-                    res.put("message", "update data successfully");
+                    res.put("message", "Device Found");
+                    res.put("data", downlinkPort);
                     res.writeJSONString(hsr1.getWriter());
-                    hsr1.setStatus(200);
                 }
             } catch (Throwable ex) {
                 Logger.getLogger(GenerateDownlinkPort.class.getName()).log(Level.SEVERE, null, ex);

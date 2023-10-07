@@ -175,7 +175,8 @@ public class GenerateMeServiceDao {
         return result;
     }
 
-    public JSONArray callGenerateMeService(String wonum, ListGenerateAttributes listGenerate) {
+    public JSONObject callGenerateMeService(String wonum, ListGenerateAttributes listGenerate) {
+        JSONObject msg = new JSONObject();
         try {
             JSONObject assetAttributes = getAssetattridType(wonum);
             String deviceName = assetAttributes.optString("PE_NAME", "null");
@@ -189,7 +190,7 @@ public class GenerateMeServiceDao {
             URL getDeviceLinkPortByIp = new URL(urlByIp);
 
             if (nteType != null) {
-                if (nteType == "DirectME") {
+                if (nteType.equals("DirectME")) {
                     HttpURLConnection con = (HttpURLConnection) getDeviceLinkPortByIp.openConnection();
 
                     con.setRequestMethod("GET");
@@ -200,7 +201,7 @@ public class GenerateMeServiceDao {
 
                     if (responseCode == 400) {
                         LogUtil.info(this.getClass().getName(), "ME Service Not found!");
-
+                        msg.put("ME Service", "None");
                     } else if (responseCode == 200) {
                         BufferedReader in = new BufferedReader(
                                 new InputStreamReader(con.getInputStream()));
@@ -222,6 +223,11 @@ public class GenerateMeServiceDao {
                         String manufactur = portArrayNode.get(0).get("manufacturer").asText();
                         String name = portArrayNode.get(0).get("name").asText();
                         String ipAddress = portArrayNode.get(0).get("ipAddress").asText();
+                        
+                        msg.put("ME_MANUFACTUR", manufactur);
+                        msg.put("ME_NAME", name);
+                        msg.put("ME_IP", ipAddress);
+                        
                         LogUtil.info(this.getClass().getName(), "ME SERVICE MANUFACTUR :" + manufactur);
                         LogUtil.info(this.getClass().getName(), "ME SERVICE NAME :" + name);
                         LogUtil.info(this.getClass().getName(), "ME SERVICE IPADDRESS :" + ipAddress);
@@ -239,9 +245,10 @@ public class GenerateMeServiceDao {
                     LogUtil.info(this.getClass().getName(), "\nSending 'GET' request to URL : " + url);
                     LogUtil.info(this.getClass().getName(), "Response Code : " + responseCode);
 
-                    if (responseCode == 400) {
+                    if (responseCode == 404) {
                         LogUtil.info(this.getClass().getName(), "ME Service not found!");
                         listGenerate.setStatusCode(responseCode);
+                        msg.put("ME Service", "None");
                     } else if (responseCode == 200) {
                         listGenerate.setStatusCode(responseCode);
                         BufferedReader in = new BufferedReader(
@@ -267,14 +274,13 @@ public class GenerateMeServiceDao {
                         String mtu = jsonObject.getString("mtu");
                         String key = jsonObject.getString("key");
                         String portName = jsonObject.getString("name");
-
-                        LogUtil.info(this.getClass().getName(), "===============PARSING DATA==============");
-                        LogUtil.info(this.getClass().getName(), "ME_SERVICE_MANUFACTUR : " + manufactur);
-                        LogUtil.info(this.getClass().getName(), "ME_SERVICE_NAME : " + name);
-                        LogUtil.info(this.getClass().getName(), "ME_SERVICE_IPADDRESS : " + ipAddress);
-                        LogUtil.info(this.getClass().getName(), "ME_SERVICEC_PORT_MTU : " + mtu);
-                        LogUtil.info(this.getClass().getName(), "ME_SERVICE_KEY : " + key);
-                        LogUtil.info(this.getClass().getName(), "ME_SERVICE_PORTNAME : " + portName);
+                        
+                        msg.put("ME_MANUFACTUR", manufactur);
+                        msg.put("ME_NAME", name);
+                        msg.put("ME_IPADDRESS", ipAddress);
+                        msg.put("ME_PORTMTU", mtu);
+                        msg.put("ME_KEY", key);
+                        msg.put("ME_PORTNAME", portName);
 
                         // Update STO, REGION, WITEL, DATEL from table WORKORDERSPEC
                         updateDeviceLinkPort(wonum, manufactur, name, ipAddress, mtu, key, portName);

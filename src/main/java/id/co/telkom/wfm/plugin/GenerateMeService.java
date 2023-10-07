@@ -7,6 +7,7 @@ package id.co.telkom.wfm.plugin;
 
 import id.co.telkom.wfm.plugin.dao.GenerateMeServiceDao;
 import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
+import id.co.telkom.wfm.plugin.util.ResponseAPI;
 import java.io.IOException;
 import java.util.Map;
 import javax.servlet.ServletException;
@@ -16,6 +17,7 @@ import org.joget.apps.form.model.Element;
 import org.joget.apps.form.model.FormData;
 import org.joget.commons.util.LogUtil;
 import org.joget.plugin.base.PluginWebSupport;
+import org.json.JSONArray;
 import org.json.simple.JSONObject;
 
 /**
@@ -74,19 +76,18 @@ public class GenerateMeService extends Element implements PluginWebSupport {
 
                 if (hsr.getParameterMap().containsKey("wonum")) {
                     String wonum = hsr.getParameter("wonum");
-                    dao.callGenerateMeService(wonum, listAttribute);
-                    if (listAttribute.getStatusCode() == 400) {
-                        JSONObject res1 = new JSONObject();
-                        res1.put("code", 404);
-                        res1.put("message", "No Service found!.");
-                        res1.writeJSONString(hsr1.getWriter());
-                        hsr1.setStatus(404);
-                    } else {
-                        JSONObject res = new JSONObject();
-                        res.put("code", 200);
-                        res.put("message", "update data successfully");
+                    org.json.JSONObject generateMeService = dao.callGenerateMeService(wonum, listAttribute);
+                    JSONObject res = new JSONObject();
+                    if (listAttribute.getStatusCode() == 404) {
+                        res.put("code", 422);
+                        res.put("message", "ME Service not Found");
+                        res.put("data", generateMeService);
                         res.writeJSONString(hsr1.getWriter());
-                        hsr1.setStatus(200);
+                    } else {
+                        res.put("code", 200);
+                        res.put("message", "Service Found");
+                        res.put("data", generateMeService);
+                        res.writeJSONString(hsr1.getWriter());
                     }
                 }
             } catch (Exception e) {

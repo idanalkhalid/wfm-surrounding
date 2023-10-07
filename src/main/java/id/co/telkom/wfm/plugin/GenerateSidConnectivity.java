@@ -102,21 +102,18 @@ public class GenerateSidConnectivity extends Element implements PluginWebSupport
                 ListGenerateAttributes listAttribute = new ListGenerateAttributes();
                 try {
                     
-                    dao.callGenerateConnectivity(dao.getScorderno(wonum), listAttribute);
+                    JSONObject generateConnectivity = dao.callGenerateConnectivity(wonum, listAttribute);
+                    JSONObject res = new JSONObject();
                     
                     if (listAttribute.getStatusCode() == 404) {
-                        JSONObject res1 = new JSONObject();
-                        res1.put("code", 404);
-                        res1.put("message", "No Service found!.");
-                        res1.writeJSONString(hsr1.getWriter());
-//                        dao.insertIntegrationHistory(wonum, line, wonum, wonum, orderId);
-                    } else if (listAttribute.getStatusCode() == 200) {
-                        dao.moveFirst(wonum);
-                        dao.insertIntoDeviceTable(wonum, listAttribute);
-//                        dao.insertIntegrationHistory(wonum, line, wonum, wonum, orderId);
-                        JSONObject res = new JSONObject();
+                        res.put("code", 404);
+                        res.put("message", "No Service found!.");
+                        res.put("Data", generateConnectivity);
+                        res.writeJSONString(hsr1.getWriter());
+                    } else if (listAttribute.getStatusCode() == 200) {  
                         res.put("code", 200);
-                        res.put("message", "update data successfully");
+                        res.put("message", "Service Found");
+                        res.put("Data", generateConnectivity);
                         res.writeJSONString(hsr1.getWriter());
                     }
                 } catch (IOException | SQLException | JSONException ex) {

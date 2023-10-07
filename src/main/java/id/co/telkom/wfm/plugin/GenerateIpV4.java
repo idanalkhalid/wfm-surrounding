@@ -6,6 +6,7 @@
 package id.co.telkom.wfm.plugin;
 
 import id.co.telkom.wfm.plugin.dao.GenerateIpV4Dao;
+import id.co.telkom.wfm.plugin.dao.ValidateDao;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.util.Map;
@@ -68,52 +69,31 @@ public class GenerateIpV4 extends Element implements PluginWebSupport {
     @Override
     public void webService(HttpServletRequest hsr, HttpServletResponse hsr1) throws ServletException, IOException {
         GenerateIpV4Dao dao = new GenerateIpV4Dao();
-
         //@@Start..
-        LogUtil.info(this.getClass().getName(), "############## START PROCESS GENERATE IPv4 ###############");
+        LogUtil.info(getClass().getName(), "Start Process: Validate LME");
+        //  JSONObject res = new JSONObject();
 
-        //@Authorization
         if ("POST".equals(hsr.getMethod())) {
             try {
-                //@Parsing message
-                //HttpServletRequest get JSON Post data
-                StringBuffer jb = new StringBuffer();
-                String line = null;
-                try {//read the response JSON to string buffer
-                    BufferedReader reader = hsr.getReader();
-                    while ((line = reader.readLine()) != null) {
-                        jb.append(line);
-                    }
-                } catch (Exception e) {
-                    LogUtil.error(getClassName(), e, "Trace error here: " + e.getMessage());
+                org.json.simple.JSONObject res =  new org.json.simple.JSONObject();
+                if (hsr.getParameterMap().containsKey("wonum")) {
+                    String wonum = hsr.getParameter("wonum");
+                    String generateIPV4 = dao.GenerateIpV4(wonum);
+                    
+                    if (generateIPV4.equals("IP Reservation Failed for WAN/LAN.")) {
+                        res.put("code", 422);
+                        res.put("message", generateIPV4);
+                        res.writeJSONString(hsr1.getWriter());
+                    } else {
+                        res.put("code", 200);
+                        res.put("message", generateIPV4);
+                        res.writeJSONString(hsr1.getWriter());
+                    } 
                 }
-                LogUtil.info(getClassName(), "Request Body: " + jb.toString());
-                
-                //Parse JSON String to JSON Object
-                String bodyParam = jb.toString(); //String
-                JSONParser parser = new JSONParser();
-                JSONObject data_obj = (JSONObject) parser.parse(bodyParam);//JSON Object
-                //Store param
-                String route = data_obj.get("route").toString();
-                String rtImport = data_obj.get("rtImport").toString();
-                String rtExport = data_obj.get("rtExport").toString();
-//                String serviceType = data_obj.get("serviceType").toString();
-//                String vrf = data_obj.get("ipType").toString();
-//                String ipType = data_obj.get("ipArea").toString();
-//                String ipArea = data_obj.get("ipVersion").toString();
-//                String ipVersion = data_obj.get("ipVersion").toString();
-//                String packageType = data_obj.get("packageType").toString();
-                
-                try {
-//                    dao.request(serviceType, vrf, ipType, ipArea, ipVersion, packageType);
-                    dao.requestVpn(route, rtImport, rtExport);
-                } catch (Exception e) {
-                    Logger.getLogger(GenerateIpV4.class.getName()).log(Level.SEVERE, null, e);
-                }
-            } catch (ParseException ex) {
-                Logger.getLogger(GenerateIpV4.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (Exception e) {
+                LogUtil.error(getClassName(), e, "Trace Error Here : " + e.getMessage());
             }
-        } else if (!"POST".equals(hsr.getMethod())) {
+        } else if (!"GET".equals(hsr.getMethod())) {
             try {
                 hsr1.sendError(405, "Method Not Allowed");
             } catch (Exception e) {

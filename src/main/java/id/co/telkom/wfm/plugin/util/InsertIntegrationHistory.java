@@ -3,12 +3,12 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package id.co.telkom.wfm.plugin.dao;
+package id.co.telkom.wfm.plugin.util;
 
 /**
  *
  * @author ASUS
  */
-public class test {
+public class InsertIntegrationHistory {
     
 }

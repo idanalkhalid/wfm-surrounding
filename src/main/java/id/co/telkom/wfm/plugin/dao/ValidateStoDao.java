@@ -44,62 +44,31 @@ public class ValidateStoDao {
         return resultObj;
     }
 
-    public boolean updateSto(String wonum, String sto, String region, String witel, String datel) throws SQLException {
+    public boolean updateSto(String wonum, String sto, String region, String witel, String datel) {
         boolean result = false;
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        StringBuilder update = new StringBuilder();
-        update.append("UPDATE APP_FD_WORKORDERSPEC ")
-                .append("SET c_value = CASE c_assetattrid ")
-                .append("WHEN 'STO' THEN ? ")
-                .append("WHEN 'REGION' THEN ? ")
-                .append("WHEN 'WITEL' THEN ? ")
-                .append("WHEN 'DATEL' THEN ? ")
-                .append("ELSE 'Missing' END ")
-                .append("WHERE c_wonum = ? ")
-                .append("AND c_assetattrid IN ('STO', 'REGION', 'WITEL', 'DATEL') ");
-        try {
-            Connection con = ds.getConnection();
-            try {
-                PreparedStatement ps = con.prepareStatement(update.toString());
-                try {
-                    ps.setString(1, sto);
-                    ps.setString(2, region);
-                    ps.setString(3, witel);
-                    ps.setString(4, datel);
-                    ps.setString(5, wonum);
+        String updateQuery = "UPDATE APP_FD_WORKORDERSPEC "
+                + "SET c_value = CASE c_assetattrid "
+                + "WHEN 'STO' THEN ? "
+                + "WHEN 'REGION' THEN ? "
+                + "WHEN 'WITEL' THEN ? "
+                + "WHEN 'DATEL' THEN ? "
+                + "ELSE 'Missing' END "
+                + "WHERE c_wonum = ? "
+                + "AND c_assetattrid IN ('STO', 'REGION', 'WITEL', 'DATEL') ";
 
-                    int exe = ps.executeUpdate();
-                    if (exe > 0) {
-                        result = true;
-                        LogUtil.info(getClass().getName(), "STO updated to " + wonum);
-                    }
-                    if (ps != null) {
-                        ps.close();
-                    }
-                } catch (Throwable throwable) {
-                    try {
-                        if (ps != null) {
-                            ps.close();
-                        }
-                    } catch (Throwable throwable1) {
-                        throwable.addSuppressed(throwable1);
-                    }
-                    throw throwable;
-                }
-                if (con != null) {
-                    con.close();
-                }
-            } catch (Throwable throwable) {
-                try {
-                    if (con != null) {
-                        con.close();
-                    }
-                } catch (Throwable throwable1) {
-                    throwable.addSuppressed(throwable1);
-                }
-                throw throwable;
-            } finally {
-                ds.getConnection().close();
+        try (Connection con = ds.getConnection();
+                PreparedStatement ps = con.prepareStatement(updateQuery)) {
+            ps.setString(1, sto);
+            ps.setString(2, region);
+            ps.setString(3, witel);
+            ps.setString(4, datel);
+            ps.setString(5, wonum);
+
+            int exe = ps.executeUpdate();
+            if (exe > 0) {
+                result = true;
+                LogUtil.info(getClass().getName(), "STO updated to " + wonum);
             }
         } catch (SQLException e) {
             LogUtil.error(getClass().getName(), e, "Trace error here: " + e.getMessage());
@@ -108,16 +77,17 @@ public class ValidateStoDao {
     }
 
     public JSONObject callUimaxStoValidation(String wonum, ListGenerateAttributes listGenerate) {
+        JSONObject msg = new JSONObject();
         try {
-            String productType = getAssetattrid(wonum).get("PRODUCT_TYPE").toString();
-            String latitude = getAssetattrid(wonum).get("LATITUDE").toString();
-            String longitude = getAssetattrid(wonum).get("LONGITUDE").toString();
+            JSONObject assetattr = getAssetattrid(wonum);
+            String productType = assetattr.optString("PRODUCT_TYPE", null);
+            String latitude = assetattr.optString("LATITUDE", null);
+            String longitude = assetattr.optString("LONGITUDE", null);
             LogUtil.info(this.getClass().getName(), "PRODUCT_TYPE : " + productType);
             LogUtil.info(this.getClass().getName(), "LATITUDE : " + latitude);
             LogUtil.info(this.getClass().getName(), "LONGITUDE : " + longitude);
-            
+
             String url = "https://api-emas.telkom.co.id:8443/api/area/stoByCoordinate?" + "lat=" + latitude + "&lon=" + longitude + "&serviceType=" + productType;
-//            String url = "https://api-emas.telkom.co.id:8443/api/area/stoByService?serviceId=1-1147792-0031307299";
             URL obj = new URL(url);
             HttpURLConnection con = (HttpURLConnection) obj.openConnection();
 
@@ -127,9 +97,10 @@ public class ValidateStoDao {
             LogUtil.info(this.getClass().getName(), "\nSending 'GET' request to URL : " + url);
             LogUtil.info(this.getClass().getName(), "Response Code : " + responseCode);
 
-            if (responseCode == 400) {
+            if (responseCode == 404) {
                 LogUtil.info(this.getClass().getName(), "STO not found");
                 listGenerate.setStatusCode(responseCode);
+                msg.put("STO", "None");
             } else if (responseCode == 200) {
                 listGenerate.setStatusCode(responseCode);
                 BufferedReader in = new BufferedReader(
@@ -156,6 +127,12 @@ public class ValidateStoDao {
                 String region = regionObj.getString("name");
                 JSONObject datelObj = jsonObject.getJSONObject("datel");
                 String datel = datelObj.getString("name");
+                
+                msg.put("STO", sto);
+                msg.put("REGION", region);
+                msg.put("WITEL", witel);
+                msg.put("DATEL", datel);
+                
                 LogUtil.info(this.getClass().getName(), "STO : " + sto);
                 LogUtil.info(this.getClass().getName(), "STO Description : " + stodesc);
                 LogUtil.info(this.getClass().getName(), "Region : " + region);
@@ -168,6 +145,6 @@ public class ValidateStoDao {
         } catch (Exception e) {
             LogUtil.info(this.getClass().getName(), "Trace error here :" + e.getMessage());
         }
-        return null;
+        return msg;
     }
 }
