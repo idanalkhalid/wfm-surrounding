@@ -55,7 +55,7 @@ public class GenerateStpNetLocDao {
 
             String request = createRequest(latitude, longitude);
 
-            org.json.JSONObject temp = callUIM.callUIM(request);
+            JSONObject temp = callUIM.callUIM(request);
 
             // Parsing response data
             LogUtil.info(this.getClass().getName(), "############ Parsing Data Response ##############");
@@ -69,7 +69,14 @@ public class GenerateStpNetLocDao {
             if (statusCode == 4001) {
                 LogUtil.info(this.getClass().getName(), "No Device found.");
                 listGenerate.setStatusCode(statusCode);
+                deleteTkDeviceattribute(wonum);
+                insertToDeviceTable(wonum, "STP_NETWORKLOCATION", "", "None");
+                insertToDeviceTable(wonum, "STP_NAME", "", "None");
+                insertToDeviceTable(wonum, "STP_SPECIFICATION", "", "None");
+                insertToDeviceTable(wonum, "STP_ID", "", "None");
+                
                 msg.put("Device", "None");
+
             } else if (statusCode == 4000) {
                 listGenerate.setStatusCode(statusCode);
                 // Clear data
@@ -81,23 +88,40 @@ public class GenerateStpNetLocDao {
                     JSONObject deviceInfo = (JSONObject) deviceInfoObj;
 //                    LogUtil.info(this.getClass().getName(), "DeviceInfo JSONObject :" + deviceInfo);
                     String name = deviceInfo.getString("name");
-                    String type = deviceInfo.getString("networkLocation");
-                    msg.put("Name", name);
-                    msg.put("Type", type);
+                    String specification = deviceInfo.getString("specification");
+                    String id = deviceInfo.getString("id");
+                    String networklocation = deviceInfo.getString("networkLocation");
 
-                    LogUtil.info(this.getClass().getName(), "Name : " + name + "Type : " + type);
-                    insertToDeviceTable(wonum, type, name);
+                    msg.put("Name", name);
+                    msg.put("Specification", specification);
+                    msg.put("id", id);
+                    msg.put("networklocation", networklocation);
+
+                    LogUtil.info(this.getClass().getName(), "Data = " + msg);
+
+                    insertToDeviceTable(wonum, "STP_NETWORKLOCATION", "", networklocation);
+                    insertToDeviceTable(wonum, "STP_NAME", networklocation, name);
+                    insertToDeviceTable(wonum, "STP_SPECIFICATION", networklocation, specification);
+                    insertToDeviceTable(wonum, "STP_ID", networklocation, id);
                 } else if (deviceInfoObj instanceof JSONArray) {
                     JSONArray deviceInfo = device.getJSONArray("DeviceInfo");
                     for (int i = 0; i < deviceInfo.length(); i++) {
                         JSONObject data = deviceInfo.getJSONObject(i);
                         String name = data.getString("name");
-                        String type = data.getString("networkLocation");
+                        String networklocation = data.getString("networkLocation");
+                        String id = data.getString("id");
+                        String specification = data.getString("specification");
                         msg.put("Name", name);
-                        msg.put("Type", type);
+                        msg.put("Specification", specification);
+                        msg.put("id", id);
+                        msg.put("networklocation", networklocation);
 
-                        LogUtil.info(this.getClass().getName(), "Name : " + name + "Type : " + type);
-                        insertToDeviceTable(wonum, type, name);
+                        LogUtil.info(this.getClass().getName(), "Data = " + msg);
+
+                        insertToDeviceTable(wonum, "STP_NETWORKLOCATION", "", networklocation);
+                        insertToDeviceTable(wonum, "STP_NAME", networklocation, name);
+                        insertToDeviceTable(wonum, "STP_SPECIFICATION", networklocation, specification);
+                        insertToDeviceTable(wonum, "STP_ID", networklocation, id);
                     }
                 }
             }
@@ -130,7 +154,7 @@ public class GenerateStpNetLocDao {
         return moveFirst;
     }
 
-    public void insertToDeviceTable(String wonum, String type, String name) throws Throwable {
+    public void insertToDeviceTable(String wonum, String attrName, String type, String description) throws Throwable {
         ListGenerateAttributes listAttribute = new ListGenerateAttributes();
         // Generate UUID
         String uuId = UuidGenerator.getInstance().getUuid();
@@ -141,9 +165,9 @@ public class GenerateStpNetLocDao {
                 PreparedStatement ps = con.prepareStatement(insert)) {
             ps.setString(1, uuId);
             ps.setString(2, wonum);
-            ps.setString(3, "STP_NETWORKLOCATION");
+            ps.setString(3, attrName);
             ps.setString(4, type);
-            ps.setString(5, name);
+            ps.setString(5, description);
 
             int exe = ps.executeUpdate();
 
