@@ -36,6 +36,25 @@ public class GenerateVRFNameExistingDao {
         return result;
     }
 
+    public String getWonum(String p_wonum) throws SQLException, JSONException {
+        String result = null;
+        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
+        String query = "SELECT C_WONUM FROM APP_FD_WORKORDER WHERE c_parent=? AND c_detailactcode IN ('Review Order TSQ VPN')";
+
+        try (Connection con = ds.getConnection();
+             PreparedStatement ps = con.prepareStatement(query)) {
+            ps.setString(1, p_wonum);
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                result = rs.getString("c_wonum");
+            }
+        } catch (SQLException e) {
+            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
+        }
+        return result;
+    }
+
+
     public boolean deletetkDeviceattribute(String wonum, Connection con) throws SQLException{
         boolean status = false;
         String queryDelete = "DELETE FROM app_fd_tk_deviceattribute WHERE c_ref_num = ?";
@@ -72,11 +91,13 @@ public class GenerateVRFNameExistingDao {
     }
 
 
-    public String callGenerateVRFNameExisting(String wonum) {
+    public String callGenerateVRFNameExisting(String parent) {
         String msg = "";
         try {
-            LogUtil.info(this.getClass().getName(), "\nSending 'GET' request to URL : " + wonum);
+            LogUtil.info(this.getClass().getName(), "\nSending 'GET' request to URL Parent Wonum: " + parent);
+            String wonum = getWonum(parent);
             String vrfName= findVRF(wonum);
+            LogUtil.info(this.getClass().getName(), "\nVRF Name : " + wonum);
             LogUtil.info(this.getClass().getName(), "\nVRF Name : " + vrfName);
 
 
