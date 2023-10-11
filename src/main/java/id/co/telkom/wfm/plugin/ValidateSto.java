@@ -17,6 +17,7 @@ import org.joget.apps.form.model.FormData;
 import org.joget.commons.util.LogUtil;
 import org.joget.plugin.base.PluginWebSupport;
 import org.json.simple.JSONObject;
+//import org.json.simple.JSONObject;
 
 /**
  *
@@ -72,10 +73,9 @@ public class ValidateSto extends Element implements PluginWebSupport {
             try {
                 ValidateStoDao dao = new ValidateStoDao();
 
-                JSONObject res =  new JSONObject();
                 if (hsr.getParameterMap().containsKey("wonum")) {
                     String wonum = hsr.getParameter("wonum");
-                    
+                    JSONObject res = new JSONObject();
                     org.json.JSONObject validateSTO = dao.callUimaxStoValidation(wonum, listAttribute);
                     if (listAttribute.getStatusCode() == 404) {
                         res.put("code", 422);
@@ -83,7 +83,7 @@ public class ValidateSto extends Element implements PluginWebSupport {
                         res.put("data", validateSTO);
                         res.writeJSONString(hsr1.getWriter());
                     } else if (listAttribute.getStatusCode() == 200) {
-                        res.put("code", 422);
+                        res.put("code", 200);
                         res.put("message", "STO Found!");
                         res.put("data", validateSTO);
                         res.writeJSONString(hsr1.getWriter());

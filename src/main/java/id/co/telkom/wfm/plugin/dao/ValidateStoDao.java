@@ -30,13 +30,13 @@ public class ValidateStoDao {
     public JSONObject getAssetattrid(String wonum) throws SQLException, JSONException {
         JSONObject resultObj = new JSONObject();
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String query = "SELECT c_assetattrid, c_value FROM app_fd_workorderspec WHERE c_wonum = ? AND c_assetattrid IN ('PRODUCT_TYPE','LATITUDE','LONGITUDE')";
+        String query = "SELECT c_description, c_value FROM app_fd_workorderspec WHERE c_wonum = ? AND c_description IN ('PRODUCT_TYPE','LATITUDE','LONGITUDE')";
         try (Connection con = ds.getConnection();
                 PreparedStatement ps = con.prepareStatement(query)) {
             ps.setString(1, wonum);
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
-                resultObj.put(rs.getString("c_assetattrid"), rs.getString("c_value"));
+                resultObj.put(rs.getString("c_description"), rs.getString("c_value"));
             }
         } catch (SQLException e) {
             LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
@@ -47,15 +47,16 @@ public class ValidateStoDao {
     public boolean updateSto(String wonum, String sto, String region, String witel, String datel) {
         boolean result = false;
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String updateQuery = "UPDATE APP_FD_WORKORDERSPEC "
-                + "SET c_value = CASE c_assetattrid "
+        String updateQuery 
+                = "UPDATE APP_FD_WORKORDERSPEC "
+                + "SET c_value = CASE c_description "
                 + "WHEN 'STO' THEN ? "
                 + "WHEN 'REGION' THEN ? "
                 + "WHEN 'WITEL' THEN ? "
                 + "WHEN 'DATEL' THEN ? "
                 + "ELSE 'Missing' END "
                 + "WHERE c_wonum = ? "
-                + "AND c_assetattrid IN ('STO', 'REGION', 'WITEL', 'DATEL') ";
+                + "AND c_description IN ('STO', 'REGION', 'WITEL', 'DATEL')";
 
         try (Connection con = ds.getConnection();
                 PreparedStatement ps = con.prepareStatement(updateQuery)) {
