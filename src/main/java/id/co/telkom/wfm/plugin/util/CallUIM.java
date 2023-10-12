@@ -5,6 +5,7 @@
  */
 package id.co.telkom.wfm.plugin.util;
 
+import id.co.telkom.wfm.plugin.model.APIConfig;
 import id.co.telkom.wfm.plugin.model.URLManager;
 import java.io.IOException;
 import java.io.InputStream;
@@ -24,9 +25,14 @@ import org.json.XML;
 public class CallUIM {
 
     public JSONObject callUIM(String request) throws MalformedURLException, IOException, JSONException {
-        URLManager urlManager = new URLManager();
-
-        String urlres = urlManager.getURL("UIM");
+//        URLManager urlManager = new URLManager();
+        ConnUtil util = new ConnUtil();
+        APIConfig api = new APIConfig();
+        
+        util.getApiParam("uim_dev");
+        
+        String urlres = api.getUrl();
+//        String urlres = urlManager.getURL("UIM");
         URL url = new URL(urlres);
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setDoOutput(true);
