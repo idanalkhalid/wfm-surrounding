@@ -86,7 +86,7 @@ public class GenerateSidConnectivityDao {
                     + "    </soapenv:Body>\n"
                     + "</soapenv:Envelope>";
             
-            org.json.JSONObject temp = callUIM.callUIM(request);
+            org.json.JSONObject temp = callUIM.callUIM(request, "uim_dev");
 
             //Parsing response data
             LogUtil.info(this.getClass().getName(), "############ Parsing Data Response ##############");

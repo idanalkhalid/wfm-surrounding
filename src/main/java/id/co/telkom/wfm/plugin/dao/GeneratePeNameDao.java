@@ -66,7 +66,7 @@ public class GeneratePeNameDao {
         return result;
     }
 
-    public boolean deletetkDeviceattribute(String wonum, Connection con) throws SQLException {
+    private boolean deletetkDeviceattribute(String wonum, Connection con) throws SQLException {
         boolean status = false;
         String queryDelete = "DELETE FROM app_fd_tk_deviceattribute WHERE c_ref_num = ?";
         PreparedStatement ps = con.prepareStatement(queryDelete);
@@ -79,7 +79,7 @@ public class GeneratePeNameDao {
         return status;
     }
 
-    public boolean updateCommunityTransit(String wonum, String community) throws SQLException {
+    private boolean updateCommunityTransit(String wonum, String community) throws SQLException {
         boolean result = false;
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
         StringBuilder update = new StringBuilder();
@@ -162,7 +162,7 @@ public class GeneratePeNameDao {
         }
     }
 
-    public boolean updateAttributeValue(String wonum, String peIpaddress, String peModel) throws SQLException {
+    private boolean updateAttributeValue(String wonum, String peIpaddress, String peModel) throws SQLException {
         boolean result = false;
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
         String update = "UPDATE APP_FD_WORKORDERSPEC\n"

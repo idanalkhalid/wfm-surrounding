@@ -5,31 +5,31 @@
  */
 package id.co.telkom.wfm.plugin.dao;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.*;
+import id.co.telkom.wfm.plugin.kafka.ResponseKafka;
+import id.co.telkom.wfm.plugin.model.APIConfig;
 import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import id.co.telkom.wfm.plugin.util.ConnUtil;
+import id.co.telkom.wfm.plugin.util.FormatLogIntegrationHistory;
+import java.io.*;
+import java.net.*;
+import java.sql.*;
 import javax.sql.DataSource;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.commons.util.LogUtil;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
+import org.json.*;
 
 /**
  *
  * @author ASUS
  */
 public class GenerateMeAccessDao {
+
+    FormatLogIntegrationHistory insertIntegrationHistory = new FormatLogIntegrationHistory();
+    ResponseKafka responseKafka = new ResponseKafka();
+    // Get URL
+    ConnUtil connUtil = new ConnUtil();
+    APIConfig apiConfig = new APIConfig();
 
     public JSONObject getAssetattridType(String wonum) throws SQLException, JSONException {
         JSONObject resultObj = new JSONObject();
@@ -173,6 +173,7 @@ public class GenerateMeAccessDao {
         JSONObject msg = new JSONObject();
 
         JSONObject assetAttributes = getAssetattridType(wonum);
+        ConnUtil util = new ConnUtil();
 
         String deviceName = assetAttributes.optString("AN_NAME", "null").replace("/", "%2F").replace(" ", "%20");
         String portname = assetAttributes.optString("AN_UPLINK_PORTNAME", "null").replace("/", "%2F").replace(" ", "%20");
@@ -195,8 +196,10 @@ public class GenerateMeAccessDao {
         }
 
         try {
-            String url = "https://api-emas.telkom.co.id:8443/api/device/linkedPort?" + "deviceName=" + deviceName + "&portName=" + portname + "&deviceLink=" + deviceLink;
-            String urlByIp = "https://api-emas.telkom.co.id:8443/api/device/find?" + "ipAddress=" + meIpAddress;
+            APIConfig api = util.getApiParam("uimax_dev");
+            String URL = api.getUrl();
+            String url = URL + "api/device/linkedPort?" + "deviceName=" + deviceName + "&portName=" + portname + "&deviceLink=" + deviceLink;
+            String urlByIp = URL + "api/device/find?" + "ipAddress=" + meIpAddress;
 
             URL getDeviceLinkPort = new URL(url);
             URL getDeviceLinkPortByIp = new URL(urlByIp);
@@ -213,10 +216,14 @@ public class GenerateMeAccessDao {
                     LogUtil.info(this.getClass().getName(), "\nSending 'GET' request to URL : " + urlByIp);
                     LogUtil.info(this.getClass().getName(), "Response Code : " + responseCode);
 
-                    if (responseCode == 400) {
+                    if (responseCode == 404) {
                         LogUtil.info(this.getClass().getName(), "ME Service Not found!");
                         listGenerate.setStatusCode(responseCode);
                         msg.put("Device", "None");
+                        JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "MEACCESS", apiConfig.getUrl(), "Success", urlByIp, "ME Service Not Found!");
+                        String kafkaRes = formatResponse.toString();
+                        responseKafka.IntegrationHistory(kafkaRes);
+                        LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
                     } else if (responseCode == 200) {
                         listGenerate.setStatusCode(responseCode);
                         BufferedReader in = new BufferedReader(
@@ -250,6 +257,15 @@ public class GenerateMeAccessDao {
                         // Update Data ME ACCESS BY IPADDRESS
                         updateDeviceLinkPortByIp(wonum, manufactur, name, ipAddress);
                         updateReadOnly(wonum, 0);
+                        JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "MEACCESS", apiConfig.getUrl(), "Success", urlByIp, jsonData);
+                        String kafkaRes = formatResponse.toString();
+                        responseKafka.IntegrationHistory(kafkaRes);
+                        LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
+                    } else {
+                        JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "MEACCESS", apiConfig.getUrl(), "Failed", urlByIp, "");
+                        String kafkaRes = formatResponse.toString();
+                        responseKafka.IntegrationHistory(kafkaRes);
+                        LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
                     }
                 } else {
                     HttpURLConnection con = (HttpURLConnection) getDeviceLinkPort.openConnection();
@@ -263,6 +279,10 @@ public class GenerateMeAccessDao {
                     if (responseCode == 404) {
                         LogUtil.info(this.getClass().getName(), "ME Access not found!");
                         listGenerate.setStatusCode(responseCode);
+                        JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "MEACCESS", apiConfig.getUrl(), "Success", url, "ME Access not found!");
+                        String kafkaRes = formatResponse.toString();
+                        responseKafka.IntegrationHistory(kafkaRes);
+                        LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
                     } else if (responseCode == 200) {
                         listGenerate.setStatusCode(responseCode);
                         BufferedReader in = new BufferedReader(
@@ -306,6 +326,15 @@ public class GenerateMeAccessDao {
 
                         // Update STO, REGION, WITEL, DATEL from table WORKORDERSPEC
                         updateDeviceLinkPort(wonum, manufactur, name, ipAddress, mtu, key, portName);
+                        JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "MEACCESS", apiConfig.getUrl(), "Success", url, jsonData);
+                        String kafkaRes = formatResponse.toString();
+                        responseKafka.IntegrationHistory(kafkaRes);
+                        LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
+                    } else {
+                        JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "MEACCESS", apiConfig.getUrl(), "Failed", url, "");
+                        String kafkaRes = formatResponse.toString();
+                        responseKafka.IntegrationHistory(kafkaRes);
+                        LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
                     }
                 }
             }

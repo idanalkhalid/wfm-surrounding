@@ -17,14 +17,16 @@ import java.sql.*;
 import java.util.Date;
 
 public class GenerateVRFNameExistingDao {
+
     TimeUtil time = new TimeUtil();
+
     public String findVRF(String wonum) throws SQLException, JSONException {
-        String result = null;
+        String result = "";
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
         String query = "SELECT c_assetattrid, c_value FROM app_fd_workorderspec WHERE c_wonum = ? AND c_assetattrid IN ('VRF_NAME')";
 
         try (Connection con = ds.getConnection();
-             PreparedStatement ps = con.prepareStatement(query)) {
+                PreparedStatement ps = con.prepareStatement(query)) {
             ps.setString(1, wonum);
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
@@ -36,39 +38,20 @@ public class GenerateVRFNameExistingDao {
         return result;
     }
 
-    public String getWonum(String p_wonum) throws SQLException, JSONException {
-        String result = null;
-        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String query = "SELECT C_WONUM FROM APP_FD_WORKORDER WHERE c_parent=? AND c_detailactcode IN ('Review Order TSQ VPN')";
-
-        try (Connection con = ds.getConnection();
-             PreparedStatement ps = con.prepareStatement(query)) {
-            ps.setString(1, p_wonum);
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) {
-                result = rs.getString("c_wonum");
-            }
-        } catch (SQLException e) {
-            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
-        }
-        return result;
-    }
-
-
-    public boolean deletetkDeviceattribute(String wonum, Connection con) throws SQLException{
+    public boolean deletetkDeviceattribute(String wonum, Connection con) throws SQLException {
         boolean status = false;
         String queryDelete = "DELETE FROM app_fd_tk_deviceattribute WHERE c_ref_num = ?";
         PreparedStatement ps = con.prepareStatement(queryDelete);
         ps.setString(1, wonum);
-        int count= ps.executeUpdate();
-        if(count>0){
+        int count = ps.executeUpdate();
+        if (count > 0) {
             status = true;
         }
-        LogUtil.info(getClass().getName(), "Status Delete : "+status);
+        LogUtil.info(getClass().getName(), "Status Delete : " + status);
         return status;
     }
 
-    public boolean inserttkDeviceattribute(String wonum, String description, Connection con) throws SQLException{
+    public boolean inserttkDeviceattribute(String wonum, String description, Connection con) throws SQLException {
         boolean status = false;
         Date date = new Date();
         Timestamp timestamp = new Timestamp(date.getTime());
@@ -82,26 +65,24 @@ public class GenerateVRFNameExistingDao {
         ps.setString(4, wonum);
         ps.setTimestamp(5, timestamp);
         ps.setTimestamp(6, timestamp);
-        int count= ps.executeUpdate();
-        if(count>0){
+        int count = ps.executeUpdate();
+        if (count > 0) {
             status = true;
         }
-        LogUtil.info(getClass().getName(), "Status Insert : "+status);
+        LogUtil.info(getClass().getName(), "Status Insert : " + status);
         return status;
     }
 
-
-    public String callGenerateVRFNameExisting(String parent) {
+    public String callGenerateVRFNameExisting(String wonum) {
         String msg = "";
         try {
-            LogUtil.info(this.getClass().getName(), "\nSending 'GET' request to URL Parent Wonum: " + parent);
-            String wonum = getWonum(parent);
-            String vrfName= findVRF(wonum);
+            LogUtil.info(this.getClass().getName(), "\nSending 'GET' request to URL Parent Wonum: " + wonum);
+//            String wonum = getWonum(parent);
+            String vrfName = findVRF(wonum);
             LogUtil.info(this.getClass().getName(), "\nVRF Name : " + wonum);
             LogUtil.info(this.getClass().getName(), "\nVRF Name : " + vrfName);
 
-
-            String url = "https://api-emas.telkom.co.id:8443/api/vrf/find?vrfName=*"+vrfName+"*";
+            String url = "https://api-emas.telkom.co.id:8443/api/vrf/find?vrfName=" + vrfName;
             URL obj = new URL(url);
             HttpURLConnection con = (HttpURLConnection) obj.openConnection();
 
@@ -111,9 +92,12 @@ public class GenerateVRFNameExistingDao {
             LogUtil.info(this.getClass().getName(), "\nSending 'GET' request to URL : " + url);
             LogUtil.info(this.getClass().getName(), "Response Code : " + responseCode);
 
-            if (responseCode == 400) {
-                LogUtil.info(this.getClass().getName(), "Find VRF Name Not Found");
-
+            if (responseCode == 404) {
+                DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
+                Connection connection = ds.getConnection();
+                deletetkDeviceattribute(wonum, connection);
+                LogUtil.info(this.getClass().getName(), "VRF Name Not Found");
+                msg = "VRF Name Not Found";
             } else if (responseCode == 200) {
                 DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
                 Connection connection = ds.getConnection();
@@ -127,7 +111,7 @@ public class GenerateVRFNameExistingDao {
                 LogUtil.info(this.getClass().getName(), "STO : " + response);
                 in.close();
 
-                    // At this point, 'response' contains the JSON data as a string
+                // At this point, 'response' contains the JSON data as a string
                 String jsonData = response.toString();
 
                 // Now, parse the JSON data using org.json library
@@ -137,14 +121,14 @@ public class GenerateVRFNameExistingDao {
                     JSONObject responObject = jsonArray.getJSONObject(i);
                     String vrcNamedesc = responObject.getString("name");
                     inserttkDeviceattribute(wonum, vrcNamedesc, connection);
-                    msg=msg+"VRF Name: "+vrcNamedesc+"\n";
+                    msg = msg + "VRF Name: " + vrcNamedesc + "\n";
                 }
 
-                return "VRF Name Existing Found\n"+msg;
+                return "VRF Name Existing Found\n" + msg;
             }
         } catch (Exception e) {
             msg = e.getMessage();
-            msg = "Generate VRF Name Failed.\n"+msg;
+            msg = "Generate VRF Name Failed.\n" + msg;
             LogUtil.info(this.getClass().getName(), "Trace error here :" + e.getMessage());
         }
         return msg;

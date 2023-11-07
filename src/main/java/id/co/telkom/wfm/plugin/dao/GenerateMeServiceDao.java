@@ -7,7 +7,9 @@ package id.co.telkom.wfm.plugin.dao;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import id.co.telkom.wfm.plugin.model.APIConfig;
 import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
+import id.co.telkom.wfm.plugin.util.ConnUtil;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
@@ -120,7 +122,7 @@ public class GenerateMeServiceDao {
                 .append("WHEN 'ME_SERVICE_PORT_MTU' THEN ? ")
                 .append("WHEN 'ME_SERVICE_KEY' THEN ? ")
                 .append("WHEN 'ME_SERVICE_PORTNAME' THEN ? ")
-                .append("ELSE 'Missing' END ")
+                .append("END ")
                 .append("WHERE c_wonum = ? ")
                 .append("AND c_assetattrid IN ('ME_SERVICE_MANUFACTURE', 'ME_SERVICE_NAME', 'ME_SERVICE_IPADDRESS', 'ME_SERVICE_PORT_MTU', 'ME_SERVICE_KEY', 'ME_SERVICE_PORTNAME')");
         try {
@@ -177,6 +179,8 @@ public class GenerateMeServiceDao {
 
     public JSONObject callGenerateMeService(String wonum, ListGenerateAttributes listGenerate) {
         JSONObject msg = new JSONObject();
+        ConnUtil util =  new ConnUtil();
+        
         try {
             JSONObject assetAttributes = getAssetattridType(wonum);
             String deviceName = assetAttributes.optString("PE_NAME", "null");
@@ -184,12 +188,15 @@ public class GenerateMeServiceDao {
             String ipaddress = assetAttributes.optString("ME_SERVICE_IPADDRESS", "null");
             String nteType = assetAttributes.optString("NTE_TYPE");
             
-            String url = "https://api-emas.telkom.co.id:8443/api/device/linkedPort?" + "deviceName=" + deviceName + "&portName=" + portname + "&deviceLink=" + "PE_METROE" + "&portStatus=ACTIVE";
-            String urlByIp = "https://api-emas.telkom.co.id:8443/api/device/find?" + "ipAddress=" + ipaddress;
+            APIConfig api = util.getApiParam("uimax_dev");
+            String URL = api.getUrl();
+            LogUtil.info(getClass().getName(), "URL : " + URL);
+            String url = URL + "api/device/linkedPort?" + "deviceName=" + deviceName + "&portName=" + portname + "&deviceLink=" + "PE_METROE" + "&portStatus=ACTIVE";
+            String urlByIp = URL + "api/device/find?" + "ipAddress=" + ipaddress;
             URL getDeviceLinkPort = new URL(url);
             URL getDeviceLinkPortByIp = new URL(urlByIp);
 
-            if (nteType != null) {
+            if (!nteType.isEmpty()) {
                 if (nteType.equals("DirectME")) {
                     HttpURLConnection con = (HttpURLConnection) getDeviceLinkPortByIp.openConnection();
 
@@ -210,7 +217,7 @@ public class GenerateMeServiceDao {
                         while ((inputLine = in.readLine()) != null) {
                             response.append(inputLine);
                         }
-                        LogUtil.info(this.getClass().getName(), "ME Service : " + response);
+                        LogUtil.info(this.getClass().getName(), "RESPONSE : " + response);
                         in.close();
 
                         // At this point, 'response' contains the JSON data as a string
@@ -286,11 +293,13 @@ public class GenerateMeServiceDao {
                         updateDeviceLinkPort(wonum, manufactur, name, ipAddress, mtu, key, portName);
                     }
                 }
+            } else {
+                LogUtil.info(getClass().getName(), "NTE_TYPE tidak ada");
             }
 
         } catch (Exception e) {
             LogUtil.info(this.getClass().getName(), "Trace error here :" + e.getMessage());
         }
-        return null;
+        return msg;
     }
 }

@@ -5,7 +5,11 @@
  */
 package id.co.telkom.wfm.plugin.dao;
 
+import id.co.telkom.wfm.plugin.kafka.ResponseKafka;
+import id.co.telkom.wfm.plugin.model.APIConfig;
 import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
+import id.co.telkom.wfm.plugin.util.ConnUtil;
+import id.co.telkom.wfm.plugin.util.FormatLogIntegrationHistory;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
@@ -27,6 +31,9 @@ import org.json.JSONObject;
  */
 public class ValidateStoDao {
 
+    FormatLogIntegrationHistory insertIntegrationHistory = new FormatLogIntegrationHistory();
+    ResponseKafka responseKafka = new ResponseKafka();
+
     public JSONObject getAssetattrid(String wonum) throws SQLException, JSONException {
         JSONObject resultObj = new JSONObject();
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
@@ -47,7 +54,7 @@ public class ValidateStoDao {
     public boolean updateSto(String wonum, String sto, String region, String witel, String datel) {
         boolean result = false;
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String updateQuery 
+        String updateQuery
                 = "UPDATE APP_FD_WORKORDERSPEC "
                 + "SET c_value = CASE c_description "
                 + "WHEN 'STO' THEN ? "
@@ -79,16 +86,26 @@ public class ValidateStoDao {
 
     public JSONObject callUimaxStoValidation(String wonum, ListGenerateAttributes listGenerate) {
         JSONObject msg = new JSONObject();
+        ConnUtil connUtil = new ConnUtil();
+        APIConfig apiConfig = new APIConfig();
+        apiConfig = connUtil.getApiParam("uimax_dev");
+
         try {
             JSONObject assetattr = getAssetattrid(wonum);
-            String productType = assetattr.optString("PRODUCT_TYPE", null);
+            String serviceType = "";
+            String productType = assetattr.optString("PRODUCT_TYPE");
             String latitude = assetattr.optString("LATITUDE", null);
             String longitude = assetattr.optString("LONGITUDE", null);
             LogUtil.info(this.getClass().getName(), "PRODUCT_TYPE : " + productType);
             LogUtil.info(this.getClass().getName(), "LATITUDE : " + latitude);
             LogUtil.info(this.getClass().getName(), "LONGITUDE : " + longitude);
 
-            String url = "https://api-emas.telkom.co.id:8443/api/area/stoByCoordinate?" + "lat=" + latitude + "&lon=" + longitude + "&serviceType=" + productType;
+            if (productType.isEmpty()) {
+                serviceType = "METRO";
+            } else {
+                serviceType = productType;
+            }
+            String url = apiConfig.getUrl() + "api/area/stoByCoordinate?" + "lat=" + latitude + "&lon=" + longitude + "&serviceType=" + serviceType;
             URL obj = new URL(url);
             HttpURLConnection con = (HttpURLConnection) obj.openConnection();
 
@@ -98,10 +115,18 @@ public class ValidateStoDao {
             LogUtil.info(this.getClass().getName(), "\nSending 'GET' request to URL : " + url);
             LogUtil.info(this.getClass().getName(), "Response Code : " + responseCode);
 
-            if (responseCode == 404) {
-                LogUtil.info(this.getClass().getName(), "STO not found");
-                listGenerate.setStatusCode(responseCode);
-                msg.put("STO", "None");
+            if (responseCode != 200) {
+                if (latitude.equals("null") || longitude.equals("null")) {
+                    msg.put("message", "Please fill the LONGITUDE and LATITUDE attribute. Then regenerate STO.");
+                } else {
+                    LogUtil.info(this.getClass().getName(), "STO not found");
+                    listGenerate.setStatusCode(responseCode);
+                    msg.put("STO", "None");
+                    JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "VALIDATESTO", apiConfig.getUrl(), "Success", url, "STO Not Found");
+                    String kafkaRes = formatResponse.toString();
+                    responseKafka.IntegrationHistory(kafkaRes);
+                    LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
+                }
             } else if (responseCode == 200) {
                 listGenerate.setStatusCode(responseCode);
                 BufferedReader in = new BufferedReader(
@@ -128,12 +153,12 @@ public class ValidateStoDao {
                 String region = regionObj.getString("name");
                 JSONObject datelObj = jsonObject.getJSONObject("datel");
                 String datel = datelObj.getString("name");
-                
+
                 msg.put("STO", sto);
                 msg.put("REGION", region);
                 msg.put("WITEL", witel);
                 msg.put("DATEL", datel);
-                
+
                 LogUtil.info(this.getClass().getName(), "STO : " + sto);
                 LogUtil.info(this.getClass().getName(), "STO Description : " + stodesc);
                 LogUtil.info(this.getClass().getName(), "Region : " + region);
@@ -142,6 +167,15 @@ public class ValidateStoDao {
 
                 // Update STO, REGION, WITEL, DATEL from table WORKORDERSPEC
                 updateSto(wonum, sto, region, witel, datel);
+
+                JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "VALIDATESTO", apiConfig.getUrl(), "Success", url, jsonData);
+                String kafkaRes = formatResponse.toString();
+                responseKafka.IntegrationHistory(kafkaRes);
+                LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
+            } else {
+                LogUtil.info(this.getClass().getName(), "STO not found");
+                listGenerate.setStatusCode(responseCode);
+                msg.put("STO", "None");
             }
         } catch (Exception e) {
             LogUtil.info(this.getClass().getName(), "Trace error here :" + e.getMessage());

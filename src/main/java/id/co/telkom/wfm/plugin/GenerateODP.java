@@ -5,14 +5,12 @@
  */
 package id.co.telkom.wfm.plugin;
 
-import id.co.telkom.wfm.plugin.dao.GenerateStpNetLocDao;
-import id.co.telkom.wfm.plugin.model.ListAttributes;
+import id.co.telkom.wfm.plugin.dao.GenerateDownlinkPortDao;
+import id.co.telkom.wfm.plugin.dao.GenerateODPDao;
 import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
 import id.co.telkom.wfm.plugin.util.ResponseAPI;
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.sql.SQLException;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -23,18 +21,16 @@ import org.joget.apps.form.model.Element;
 import org.joget.apps.form.model.FormData;
 import org.joget.commons.util.LogUtil;
 import org.joget.plugin.base.PluginWebSupport;
-import org.json.JSONException;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
-import org.json.simple.parser.ParseException;
 
 /**
  *
  * @author ASUS
  */
-public class GenerateStpNetLoc extends Element implements PluginWebSupport {
+public class GenerateODP extends Element implements PluginWebSupport {
 
-    String pluginName = "Telkom New WFM - Generate STP Network Location - Web Service";
+    String pluginName = "Telkom New WFM - Generate ODP - Web Service";
 
     @Override
     public String renderTemplate(FormData fd, Map map) {
@@ -72,13 +68,12 @@ public class GenerateStpNetLoc extends Element implements PluginWebSupport {
     }
 
     @Override
-    public void webService(HttpServletRequest hsr, HttpServletResponse hsr1) throws ServletException, IOException, MalformedURLException {
-        GenerateStpNetLocDao dao = new GenerateStpNetLocDao();
-        ResponseAPI responseTemplete = new ResponseAPI();
+    public void webService(HttpServletRequest hsr, HttpServletResponse hsr1) throws ServletException, IOException {
+//@@Start..
+        LogUtil.info(this.getClass().getName(), "############## START PROCESS GENERATE ODP ###############");
 
-        //@@Start..
-        LogUtil.info(this.getClass().getName(), "############## START PROCESS GENERATE STP NETWORK LOCATION ###############");
-
+        GenerateODPDao dao = new GenerateODPDao();
+        
         //@Authorization
         if ("POST".equals(hsr.getMethod())) {
             try {
@@ -91,52 +86,31 @@ public class GenerateStpNetLoc extends Element implements PluginWebSupport {
                     while ((line = reader.readLine()) != null) {
                         jb.append(line);
                     }
-                } catch (Exception e) {
+                } catch (IOException e) {
                     LogUtil.error(getClassName(), e, "Trace error here: " + e.getMessage());
                 }
                 LogUtil.info(getClassName(), "Request Body: " + jb.toString());
 
                 //Parse JSON String to JSON Object
-                String bodyParam = jb.toString(); //String
+                String bodyParam = jb.toString();
                 JSONParser parser = new JSONParser();
-                JSONObject data_obj = (JSONObject) parser.parse(bodyParam);//JSON Object
+                JSONObject data_obj = (JSONObject) parser.parse(bodyParam);
+
                 //Store param
                 String wonum = data_obj.get("wonum").toString();
-
-                try {
-                    LogUtil.info(getClassName(), "Call Generate STP Net Loc");
-                    JSONObject res = new JSONObject();
-                    ListGenerateAttributes listAttribute = new ListGenerateAttributes();
-                    String generateStpNetLoc = dao.callGenerateStpNetLoc(wonum, listAttribute);
-
-                    if (listAttribute.getStatusCode() == 4001) {
-                        res.put("code", 422);
-                        res.put("message", "Device Not Found!");
-                        res.put("data", generateStpNetLoc);
-                        res.writeJSONString(hsr1.getWriter());
-                    } else if (listAttribute.getStatusCode() == 4000) {
-                        res.put("code", 200);
-                        res.put("message", "Device Found " + generateStpNetLoc);
-                        res.writeJSONString(hsr1.getWriter());
-                    } else {
-                        String message = "Call Failed";
-                        res = responseTemplete.getResponse(message, 404);
-                        res.writeJSONString(hsr1.getWriter());
-                    }
-                } catch (Exception ex) {
-                    Logger.getLogger(GenerateStpNetLoc.class.getName()).log(Level.SEVERE, null, ex);
-                } catch (Throwable ex) {
-                    Logger.getLogger(GenerateStpNetLoc.class.getName()).log(Level.SEVERE, null, ex);
-                }
-            } catch (ParseException ex) {
-                Logger.getLogger(GenerateStpNetLoc.class.getName()).log(Level.SEVERE, null, ex);
+                dao.generateSTPPort(wonum);
+                
+            } catch (Throwable ex) {
+                Logger.getLogger(GenerateDownlinkPort.class.getName()).log(Level.SEVERE, null, ex);
             }
+
         } else if (!"POST".equals(hsr.getMethod())) {
             try {
                 hsr1.sendError(405, "Method Not Allowed");
-            } catch (Exception e) {
+            } catch (IOException e) {
                 LogUtil.error(getClassName(), e, "Trace error here: " + e.getMessage());
             }
         }
     }
+
 }

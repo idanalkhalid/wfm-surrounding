@@ -5,6 +5,10 @@
  */
 package id.co.telkom.wfm.plugin.dao;
 
+import id.co.telkom.wfm.plugin.kafka.ResponseKafka;
+import id.co.telkom.wfm.plugin.model.APIConfig;
+import id.co.telkom.wfm.plugin.util.ConnUtil;
+import id.co.telkom.wfm.plugin.util.FormatLogIntegrationHistory;
 import java.io.*;
 import java.net.*;
 import java.sql.*;
@@ -22,6 +26,11 @@ import org.json.simple.JSONArray;
 public class GenerateImonTaskDao {
 
     String[] requestAttributes = {};
+    FormatLogIntegrationHistory insertIntegrationHistory = new FormatLogIntegrationHistory();
+    ResponseKafka responseKafka = new ResponseKafka();
+    // Get URL
+    ConnUtil connUtil = new ConnUtil();
+    APIConfig apiConfig = new APIConfig();
 
     // Create SOAP Request
     private String createSoapRequest(String[] requestAttributes) {
@@ -91,7 +100,12 @@ public class GenerateImonTaskDao {
         org.json.JSONObject taskResponse = envelope.getJSONObject("ent:createTaskResponse");
         String status = taskResponse.getString("status");
         String message = taskResponse.getString("message");
-
+        
+        JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(requestAttributes[2], "IMONTASK", urlres, status, request, temp.toString());
+        String kafkaRes = formatResponse.toString();
+        responseKafka.IntegrationHistory(kafkaRes);
+        LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
+        
 //        Map<String, String> responseDict = new HashMap<>();
         Map<String, String> responseDict = new HashMap<>();
         if (!status.isEmpty() && !message.isEmpty()) {

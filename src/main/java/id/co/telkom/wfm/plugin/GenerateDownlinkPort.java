@@ -100,18 +100,16 @@ public class GenerateDownlinkPort extends Element implements PluginWebSupport {
 
                 ListGenerateAttributes listAttribute = new ListGenerateAttributes();
                 LogUtil.info(pluginName, "List Attr :" + listAttribute.toString());
-                org.json.JSONObject downlinkPort = dao.formatRequest(wonum, listAttribute);
+                String downlinkPort = dao.formatRequest(wonum, listAttribute);
                 if (listAttribute.getStatusCode() == 4001) {
                     JSONObject res = new JSONObject();
                     res.put("code", 422);
-                    res.put("message", "Device Not Found!");
-                    res.put("data", downlinkPort);
+                    res.put("message", "Device Not Found! " + downlinkPort);
                     res.writeJSONString(hsr1.getWriter());
                 } else if (listAttribute.getStatusCode() == 4000) {
                     JSONObject res = new JSONObject();
                     res.put("code", 200);
-                    res.put("message", "Device Found");
-                    res.put("data", downlinkPort);
+                    res.put("message", "Device Found! " + downlinkPort);
                     res.writeJSONString(hsr1.getWriter());
                 }
             } catch (Throwable ex) {
