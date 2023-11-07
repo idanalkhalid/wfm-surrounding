@@ -70,7 +70,7 @@ public class GenerateIpV4 extends Element implements PluginWebSupport {
     public void webService(HttpServletRequest hsr, HttpServletResponse hsr1) throws ServletException, IOException {
         GenerateIpV4Dao dao = new GenerateIpV4Dao();
         //@@Start..
-        LogUtil.info(getClass().getName(), "Start Process: Validate LME");
+        LogUtil.info(getClass().getName(), "Start Process: Generate IPV4");
         //  JSONObject res = new JSONObject();
 
         if ("POST".equals(hsr.getMethod())) {

@@ -30,7 +30,7 @@ public class Activator implements BundleActivator {
         registrationList.add(context.registerService(CheckACS.class.getName(), new CheckACS(), null));
         registrationList.add(context.registerService(Validate.class.getName(), new Validate(), null));
         registrationList.add(context.registerService(ShowCommand.class.getName(), new ShowCommand(), null));
-        registrationList.add(context.registerService(WFMAttribute.class.getName(), new WFMAttribute(), null));
+        registrationList.add(context.registerService(GenerateODP.class.getName(), new GenerateODP(), null));
         //Register plugin here
         //registrationList.add(context.registerService(MyPlugin.class.getName(), new MyPlugin(), null));
     }

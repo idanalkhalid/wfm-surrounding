@@ -66,7 +66,7 @@ public class GeneratePeNameDao {
         return result;
     }
 
-    public boolean deletetkDeviceattribute(String wonum, Connection con) throws SQLException {
+    private boolean deletetkDeviceattribute(String wonum, Connection con) throws SQLException {
         boolean status = false;
         String queryDelete = "DELETE FROM app_fd_tk_deviceattribute WHERE c_ref_num = ?";
         PreparedStatement ps = con.prepareStatement(queryDelete);
@@ -79,7 +79,7 @@ public class GeneratePeNameDao {
         return status;
     }
 
-    public boolean updateCommunityTransit(String wonum, String community) throws SQLException {
+    private boolean updateCommunityTransit(String wonum, String community) throws SQLException {
         boolean result = false;
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
         StringBuilder update = new StringBuilder();
@@ -136,88 +136,54 @@ public class GeneratePeNameDao {
         return result;
     }
 
-//    public void insertToDeviceTable(String wonum, String name, String type, String description) throws Throwable {
-//        // Generate UUID
-//        String uuId = UuidGenerator.getInstance().getUuid();
-//        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-//        String insert = "INSERT INTO APP_FD_TK_DEVICEATTRIBUTE (ID, C_REF_NUM, C_ATTR_NAME, C_ATTR_TYPE, C_DESCRIPTION) VALUES (?, ?, ?, ?, ?)";
-//
-//        try (Connection con = ds.getConnection();
-//                PreparedStatement ps = con.prepareStatement(insert)) {
-//            ps.setString(1, uuId);
-//            ps.setString(2, wonum);
-//            ps.setString(3, name);
-//            ps.setString(4, type);
-//            ps.setString(5, description);
-//
-//            int exe = ps.executeUpdate();
-//
-//            if (exe > 0) {
-//                LogUtil.info(this.getClass().getName(), "Berhasil menambahkan data");
-//            }
-//        } catch (SQLException e) {
-//            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
-//        } finally {
-//            ds.getConnection().close();
-//        }
-//    }
+    private void insertToDeviceTable(String wonum, String name, String type, String description) throws Throwable {
+        // Generate UUID
+        String uuId = UuidGenerator.getInstance().getUuid();
+        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
+        String insert = "INSERT INTO APP_FD_TK_DEVICEATTRIBUTE (ID, C_REF_NUM, C_ATTR_NAME, C_ATTR_TYPE, C_DESCRIPTION) VALUES (?, ?, ?, ?, ?)";
 
-    public boolean updateAttributeValue(String wonum, String peName, String peManufactur, String peIpaddress, String peModel) throws SQLException {
+        try (Connection con = ds.getConnection();
+                PreparedStatement ps = con.prepareStatement(insert)) {
+            ps.setString(1, uuId);
+            ps.setString(2, wonum);
+            ps.setString(3, name);
+            ps.setString(4, type);
+            ps.setString(5, description);
+
+            int exe = ps.executeUpdate();
+
+            if (exe > 0) {
+                LogUtil.info(this.getClass().getName(), "Berhasil menambahkan data");
+            }
+        } catch (SQLException e) {
+            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
+        } finally {
+            ds.getConnection().close();
+        }
+    }
+
+    private boolean updateAttributeValue(String wonum, String peIpaddress, String peModel) throws SQLException {
         boolean result = false;
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        StringBuilder update = new StringBuilder();
-        update.append("UPDATE APP_FD_WORKORDERSPEC ")
-                .append("SET c_value = CASE c_assetattrid ")
-                .append("WHEN 'PE_NAME' THEN ? ")
-                .append("WHEN 'PE_MANUFACTUR' THEN ? ")
-                .append("WHEN 'PE_IPADDRESS' THEN ? ")
-                .append("WHEN 'PE_MODEL' THEN ? ")
-                .append("ELSE 'Missing' END ")
-                .append("WHERE c_wonum = ? ")
-                .append("AND c_assetattrid IN ('PE_NAME', 'PE_MANUFACTUR', 'PE_MODEL', 'PE_IPADDRESS')");
-        try {
-            Connection con = ds.getConnection();
-            try {
-                PreparedStatement ps = con.prepareStatement(update.toString());
-                try {
-                    ps.setString(1, peName);
-                    ps.setString(2, peManufactur);
-                    ps.setString(3, peIpaddress);
-                    ps.setString(4, peModel);
-                    ps.setString(5, wonum);
+        String update = "UPDATE APP_FD_WORKORDERSPEC\n"
+                + "SET c_value =\n"
+                + "  CASE c_assetattrid\n"
+                + "    WHEN 'PE_IPADDRESS' THEN ?\n"
+                + "    WHEN 'PE_MODEL' THEN ?\n"
+                + "  END\n"
+                + "WHERE c_wonum = ?\n"
+                + "AND c_assetattrid IN ('PE_MODEL', 'PE_IPADDRESS')";
+        try (Connection con = ds.getConnection();
+                PreparedStatement ps = con.prepareStatement(update)) {
+            ps.setString(1, peIpaddress);
+            ps.setString(2, peModel);
+            ps.setString(3, wonum);
+            LogUtil.info(getClass().getName(), "QUERY UPDATE : " + update);
+            int exe = ps.executeUpdate();
 
-                    int exe = ps.executeUpdate();
-                    if (exe > 0) {
-                        result = true;
-                        LogUtil.info(getClass().getName(), "Downlinkport updated to " + wonum);
-                    }
-                    if (ps != null) {
-                        ps.close();
-                    }
-                } catch (Throwable throwable) {
-                    try {
-                        if (ps != null) {
-                            ps.close();
-                        }
-                    } catch (Throwable throwable1) {
-                        throwable.addSuppressed(throwable1);
-                    }
-                    throw throwable;
-                }
-                if (con != null) {
-                    con.close();
-                }
-            } catch (Throwable throwable) {
-                try {
-                    if (con != null) {
-                        con.close();
-                    }
-                } catch (Throwable throwable1) {
-                    throwable.addSuppressed(throwable1);
-                }
-                throw throwable;
-            } finally {
-                ds.getConnection().close();
+            if (exe > 0) {
+                result = true;
+                LogUtil.info(getClass().getName(), "ReadOnly updated to " + wonum);
             }
         } catch (SQLException e) {
             LogUtil.error(getClass().getName(), e, "Trace error here: " + e.getMessage());
@@ -276,7 +242,7 @@ public class GeneratePeNameDao {
                 String manufactur = portArrayNode.get(0).get("manufacturer").asText();
                 String ipAddress = portArrayNode.get(0).get("ipAddress").asText();
                 String model = portArrayNode.get(0).get("model").asText();
-                
+
                 msg.put("COMMUNITY_TRANSIT", community);
                 msg.put("PE_NAME", name);
                 msg.put("PE_MANUFACTUR", manufactur);
@@ -296,9 +262,11 @@ public class GeneratePeNameDao {
                 }
                 // Clear Data
                 deletetkDeviceattribute(wonum, connection);
-
+                // update value PE_IPADDRESS & PE_MODEL
+                updateAttributeValue(wonum, ipAddress, model);
                 // insert response data to table APP_FD_TK_DEVICEATTRIBUTE
-                updateAttributeValue(wonum, name, manufactur, ipAddress, model);
+                insertToDeviceTable(wonum, "PE_NAME", "", name);
+                insertToDeviceTable(wonum, "PE_MANUFACTUR", name, manufactur);
             }
 
         } catch (Exception e) {

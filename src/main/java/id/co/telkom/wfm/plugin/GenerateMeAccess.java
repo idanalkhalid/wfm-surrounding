@@ -66,8 +66,6 @@ public class GenerateMeAccess extends Element implements PluginWebSupport {
     public void webService(HttpServletRequest hsr, HttpServletResponse hsr1) throws ServletException, IOException {
         //@@Start..
         LogUtil.info(getClass().getName(), "Start Process: Generate ME Access");
-        ListGenerateAttributes listAttribute = new ListGenerateAttributes();
-        LogUtil.info(getClassName(), "Status Code : " + listAttribute.getStatusCode());
 
         //@Authorization
         if ("GET".equals(hsr.getMethod())) {
@@ -77,6 +75,9 @@ public class GenerateMeAccess extends Element implements PluginWebSupport {
                 ResponseAPI responseTemplete = new ResponseAPI();
 
                 if (hsr.getParameterMap().containsKey("wonum")) {
+                    ListGenerateAttributes listAttribute = new ListGenerateAttributes();
+                    LogUtil.info(getClassName(), "Status Code : " + listAttribute.getStatusCode());
+                    
                     String wonum = hsr.getParameter("wonum");
                     org.json.JSONObject MeAccess = dao.callGenerateMeAccess(wonum, listAttribute);
                     if (listAttribute.getStatusCode() == 404) {

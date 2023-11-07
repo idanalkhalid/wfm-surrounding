@@ -5,31 +5,31 @@
  */
 package id.co.telkom.wfm.plugin.dao;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.*;
+import id.co.telkom.wfm.plugin.kafka.ResponseKafka;
+import id.co.telkom.wfm.plugin.model.APIConfig;
 import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import id.co.telkom.wfm.plugin.util.ConnUtil;
+import id.co.telkom.wfm.plugin.util.FormatLogIntegrationHistory;
+import java.io.*;
+import java.net.*;
+import java.sql.*;
 import javax.sql.DataSource;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.commons.util.LogUtil;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
+import org.json.*;
 
 /**
  *
  * @author ASUS
  */
 public class GenerateMeAccessDao {
+
+    FormatLogIntegrationHistory insertIntegrationHistory = new FormatLogIntegrationHistory();
+    ResponseKafka responseKafka = new ResponseKafka();
+    // Get URL
+    ConnUtil connUtil = new ConnUtil();
+    APIConfig apiConfig = new APIConfig();
 
     public JSONObject getAssetattridType(String wonum) throws SQLException, JSONException {
         JSONObject resultObj = new JSONObject();
@@ -58,72 +58,71 @@ public class GenerateMeAccessDao {
         return resultObj;
     }
 
+    private boolean updateReadOnly(String wonum, int readonly) throws SQLException {
+        boolean result = false;
+        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
+        String updateQuery = "UPDATE APP_FD_WORKORDERSPEC\n"
+                + "SET c_readonly =\n"
+                + "  CASE c_assetattrid\n"
+                + "    WHEN 'ME_PORTNAME' THEN ?\n"
+                + "    WHEN 'ME_PORTID' THEN ?\n"
+                + "  END\n"
+                + "WHERE c_wonum = ?\n"
+                + "AND c_assetattrid IN ('ME_PORTNAME', 'ME_PORTID')";
+
+        try (Connection con = ds.getConnection();
+                PreparedStatement ps = con.prepareStatement(updateQuery)) {
+            ps.setInt(1, readonly);
+            ps.setInt(2, readonly);
+            ps.setString(3, wonum);
+            LogUtil.info(getClass().getName(), "QUERY UPDATE : " + updateQuery);
+            int exe = ps.executeUpdate();
+
+            if (exe > 0) {
+                result = true;
+                LogUtil.info(getClass().getName(), "ReadOnly updated to " + wonum);
+            }
+
+        } catch (SQLException e) {
+            LogUtil.error(getClass().getName(), e, "Trace error here: " + e.getMessage());
+        }
+        return result;
+    }
+
     public boolean updateDeviceLinkPortByIp(String wonum, String manufacture, String name, String ipAddress) throws SQLException {
         boolean result = false;
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        StringBuilder update = new StringBuilder();
-        update.append("UPDATE APP_FD_WORKORDERSPEC ")
-                .append("SET c_value = CASE c_assetattrid ")
-                .append("WHEN 'ME_MANUFACTUR' THEN ? ")
-                .append("WHEN 'ME_NAME' THEN ? ")
-                .append("WHEN 'ME_IPADDRESS' THEN ? ")
-                .append("WHEN 'AN_MANUFACTUR' THEN ? ")
-                .append("WHEN 'AN_NAME' THEN ? ")
-                .append("WHEN 'AN_IPADDRESS' THEN ? ")
-                .append("SET c_readonly = CASE c_assetattrid ")
-                .append("WHEN 'ME_PORTNAME' THEN ? ")
-                .append("WHEN 'ME_PORTID' THEN ? ")
-                .append("ELSE 'Missing' END ")
-                .append("WHERE c_wonum = ? ")
-                .append("AND c_assetattrid IN ('ME_MANUFACTUR', 'ME_NAME', 'ME_IPADDRESS', 'AN_MANUFACTUR', 'AN_NAME', 'AN_IPADDRESS', 'ME_PORTNAME', 'ME_PORTID')");
-        try {
-            Connection con = ds.getConnection();
-            try {
-                PreparedStatement ps = con.prepareStatement(update.toString());
-                try {
-                    ps.setString(1, manufacture);
-                    ps.setString(2, name);
-                    ps.setString(3, ipAddress);
-                    ps.setString(4, "-");
-                    ps.setString(5, "-");
-                    ps.setString(6, "-");
-                    ps.setInt(7, 0);
-                    ps.setInt(8, 0);
-                    ps.setString(9, wonum);
+        String update = "UPDATE APP_FD_WORKORDERSPEC\n"
+                + "SET c_value =\n"
+                + "  CASE c_assetattrid\n"
+                + "    WHEN 'ME_MANUFACTUR' THEN ?\n"
+                + "    WHEN 'ME_NAME' THEN ?\n"
+                + "    WHEN 'ME_IPADDRESS' THEN ?\n"
+                + "    WHEN 'AN_MANUFACTUR' THEN ?\n"
+                + "    WHEN 'AN_NAME' THEN ?\n"
+                + "    WHEN 'AN_IPADDRESS' THEN ?\n"
+                + "    ELSE 'Missing'\n"
+                + "  END\n"
+                + "WHERE c_wonum = ?\n"
+                + "AND c_assetattrid IN ('ME_MANUFACTUR', 'ME_NAME', 'ME_IPADDRESS', 'AN_MANUFACTUR', 'AN_NAME', 'AN_IPADDRESS')";
+        try (Connection con = ds.getConnection();
+                PreparedStatement ps = con.prepareStatement(update)) {
 
-                    int exe = ps.executeUpdate();
-                    if (exe > 0) {
-                        result = true;
-                        LogUtil.info(getClass().getName(), "ME Service updated to " + wonum);
-                    }
-                    if (ps != null) {
-                        ps.close();
-                    }
-                } catch (Throwable throwable) {
-                    try {
-                        if (ps != null) {
-                            ps.close();
-                        }
-                    } catch (Throwable throwable1) {
-                        throwable.addSuppressed(throwable1);
-                    }
-                    throw throwable;
-                }
-                if (con != null) {
-                    con.close();
-                }
-            } catch (Throwable throwable) {
-                try {
-                    if (con != null) {
-                        con.close();
-                    }
-                } catch (Throwable throwable1) {
-                    throwable.addSuppressed(throwable1);
-                }
-                throw throwable;
-            } finally {
-                ds.getConnection().close();
+            ps.setString(1, manufacture);
+            ps.setString(2, name);
+            ps.setString(3, ipAddress);
+            ps.setString(4, "-");
+            ps.setString(5, "-");
+            ps.setString(6, "-");
+            ps.setString(7, wonum);
+
+            int exe = ps.executeUpdate();
+
+            if (exe > 0) {
+                result = true;
+                LogUtil.info(getClass().getName(), "ReadOnly updated to " + wonum);
             }
+
         } catch (SQLException e) {
             LogUtil.error(getClass().getName(), e, "Trace error here: " + e.getMessage());
         }
@@ -145,52 +144,25 @@ public class GenerateMeAccessDao {
                 .append("ELSE 'Missing' END ")
                 .append("WHERE c_wonum = ? ")
                 .append("AND c_assetattrid IN ('ME_MANUFACTUR', 'ME_NAME', 'ME_IPADDRESS', 'ME_PORT_MTU', 'ME_PORTNAME', 'ME_PORTID')");
-        try {
-            Connection con = ds.getConnection();
-            try {
-                PreparedStatement ps = con.prepareStatement(update.toString());
-                try {
-                    ps.setString(1, manufacture);
-                    ps.setString(2, name);
-                    ps.setString(3, ipAddress);
-                    ps.setString(4, portMtu);
-                    ps.setString(5, portId);
-                    ps.setString(6, portName);
-                    ps.setString(7, wonum);
 
-                    int exe = ps.executeUpdate();
-                    if (exe > 0) {
-                        result = true;
-                        LogUtil.info(getClass().getName(), "ME Service updated to " + wonum);
-                    }
-                    if (ps != null) {
-                        ps.close();
-                    }
-                } catch (Throwable throwable) {
-                    try {
-                        if (ps != null) {
-                            ps.close();
-                        }
-                    } catch (Throwable throwable1) {
-                        throwable.addSuppressed(throwable1);
-                    }
-                    throw throwable;
-                }
-                if (con != null) {
-                    con.close();
-                }
-            } catch (Throwable throwable) {
-                try {
-                    if (con != null) {
-                        con.close();
-                    }
-                } catch (Throwable throwable1) {
-                    throwable.addSuppressed(throwable1);
-                }
-                throw throwable;
-            } finally {
-                ds.getConnection().close();
+        try (Connection con = ds.getConnection();
+                PreparedStatement ps = con.prepareStatement(update.toString())) {
+
+            ps.setString(1, manufacture);
+            ps.setString(2, name);
+            ps.setString(3, ipAddress);
+            ps.setString(4, portMtu);
+            ps.setString(5, portId);
+            ps.setString(6, portName);
+            ps.setString(7, wonum);
+
+            int exe = ps.executeUpdate();
+
+            if (exe > 0) {
+                result = true;
+                LogUtil.info(getClass().getName(), "ReadOnly updated to " + wonum);
             }
+
         } catch (SQLException e) {
             LogUtil.error(getClass().getName(), e, "Trace error here: " + e.getMessage());
         }
@@ -201,27 +173,39 @@ public class GenerateMeAccessDao {
         JSONObject msg = new JSONObject();
 
         JSONObject assetAttributes = getAssetattridType(wonum);
+        ConnUtil util = new ConnUtil();
 
         String deviceName = assetAttributes.optString("AN_NAME", "null").replace("/", "%2F").replace(" ", "%20");
         String portname = assetAttributes.optString("AN_UPLINK_PORTNAME", "null").replace("/", "%2F").replace(" ", "%20");
         String meIpAddress = assetAttributes.optString("ME_IPADDRESS", "null");
+        String devicelink = assetAttributes.optString("DEVICELINK", "null");
+        String linkType = assetAttributes.optString("LINK_TYPE", "null");
+        LogUtil.info(getClass().getName(), "Devicelink : " + devicelink);
+        LogUtil.info(getClass().getName(), "LinkType : " + linkType);
+
         String deviceLink = "";
-        if (deviceLink == "") {
-            deviceLink = assetAttributes.optString("DEVICELINK", "null");
+
+        if (!devicelink.isEmpty()) {
+            deviceLink = devicelink;
+            LogUtil.info(getClass().getName(), "DeviceLink : " + deviceLink);
         }
-        if (deviceLink == "") {
-            deviceLink = assetAttributes.optString("LINK_TYPE", "null");
+
+        if (!linkType.isEmpty()) {
+            deviceLink = linkType;
+            LogUtil.info(getClass().getName(), "DeviceLink : " + deviceLink);
         }
 
         try {
-            String url = "https://api-emas.telkom.co.id:8443/api/device/linkedPort?" + "deviceName=" + deviceName + "&portName=" + portname + "&deviceLink=" + deviceLink;
-            String urlByIp = "https://api-emas.telkom.co.id:8443/api/device/find?" + "ipAddress=" + meIpAddress;
+            APIConfig api = util.getApiParam("uimax_dev");
+            String URL = api.getUrl();
+            String url = URL + "api/device/linkedPort?" + "deviceName=" + deviceName + "&portName=" + portname + "&deviceLink=" + deviceLink;
+            String urlByIp = URL + "api/device/find?" + "ipAddress=" + meIpAddress;
 
             URL getDeviceLinkPort = new URL(url);
             URL getDeviceLinkPortByIp = new URL(urlByIp);
 
             String nteType = assetAttributes.optString("NTE_TYPE", null);
-            LogUtil.info(getClass().getName(), "NTE_TYPE" + nteType);
+            LogUtil.info(getClass().getName(), "NTE_TYPE : " + nteType);
             if (!nteType.isEmpty()) {
                 if (nteType.equals("DirectME") || nteType.equals("L2Switch")) {
                     HttpURLConnection con = (HttpURLConnection) getDeviceLinkPortByIp.openConnection();
@@ -232,10 +216,14 @@ public class GenerateMeAccessDao {
                     LogUtil.info(this.getClass().getName(), "\nSending 'GET' request to URL : " + urlByIp);
                     LogUtil.info(this.getClass().getName(), "Response Code : " + responseCode);
 
-                    if (responseCode == 400) {
+                    if (responseCode == 404) {
                         LogUtil.info(this.getClass().getName(), "ME Service Not found!");
                         listGenerate.setStatusCode(responseCode);
                         msg.put("Device", "None");
+                        JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "MEACCESS", apiConfig.getUrl(), "Success", urlByIp, "ME Service Not Found!");
+                        String kafkaRes = formatResponse.toString();
+                        responseKafka.IntegrationHistory(kafkaRes);
+                        LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
                     } else if (responseCode == 200) {
                         listGenerate.setStatusCode(responseCode);
                         BufferedReader in = new BufferedReader(
@@ -268,6 +256,16 @@ public class GenerateMeAccessDao {
                         msg.put("MEIPAddress", ipAddress);
                         // Update Data ME ACCESS BY IPADDRESS
                         updateDeviceLinkPortByIp(wonum, manufactur, name, ipAddress);
+                        updateReadOnly(wonum, 0);
+                        JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "MEACCESS", apiConfig.getUrl(), "Success", urlByIp, jsonData);
+                        String kafkaRes = formatResponse.toString();
+                        responseKafka.IntegrationHistory(kafkaRes);
+                        LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
+                    } else {
+                        JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "MEACCESS", apiConfig.getUrl(), "Failed", urlByIp, "");
+                        String kafkaRes = formatResponse.toString();
+                        responseKafka.IntegrationHistory(kafkaRes);
+                        LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
                     }
                 } else {
                     HttpURLConnection con = (HttpURLConnection) getDeviceLinkPort.openConnection();
@@ -281,6 +279,10 @@ public class GenerateMeAccessDao {
                     if (responseCode == 404) {
                         LogUtil.info(this.getClass().getName(), "ME Access not found!");
                         listGenerate.setStatusCode(responseCode);
+                        JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "MEACCESS", apiConfig.getUrl(), "Success", url, "ME Access not found!");
+                        String kafkaRes = formatResponse.toString();
+                        responseKafka.IntegrationHistory(kafkaRes);
+                        LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
                     } else if (responseCode == 200) {
                         listGenerate.setStatusCode(responseCode);
                         BufferedReader in = new BufferedReader(
@@ -290,7 +292,7 @@ public class GenerateMeAccessDao {
                         while ((inputLine = in.readLine()) != null) {
                             response.append(inputLine);
                         }
-                        LogUtil.info(this.getClass().getName(), "STO : " + response);
+                        LogUtil.info(this.getClass().getName(), "Response : " + response);
                         in.close();
 
                         // At this point, 'response' contains the JSON data as a string
@@ -324,6 +326,15 @@ public class GenerateMeAccessDao {
 
                         // Update STO, REGION, WITEL, DATEL from table WORKORDERSPEC
                         updateDeviceLinkPort(wonum, manufactur, name, ipAddress, mtu, key, portName);
+                        JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "MEACCESS", apiConfig.getUrl(), "Success", url, jsonData);
+                        String kafkaRes = formatResponse.toString();
+                        responseKafka.IntegrationHistory(kafkaRes);
+                        LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
+                    } else {
+                        JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "MEACCESS", apiConfig.getUrl(), "Failed", url, "");
+                        String kafkaRes = formatResponse.toString();
+                        responseKafka.IntegrationHistory(kafkaRes);
+                        LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
                     }
                 }
             }

@@ -1,32 +1,31 @@
 package id.co.telkom.wfm.plugin.dao;
 
+import id.co.telkom.wfm.plugin.kafka.ResponseKafka;
+import id.co.telkom.wfm.plugin.model.APIConfig;
 import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
+import id.co.telkom.wfm.plugin.util.ConnUtil;
+import id.co.telkom.wfm.plugin.util.FormatLogIntegrationHistory;
 import org.apache.commons.lang.ArrayUtils;
 import org.joget.apps.app.service.AppUtil;
-import org.joget.commons.util.LogUtil;
-import org.joget.commons.util.UuidGenerator;
-import org.json.JSONException;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-import org.json.XML;
-
+import org.joget.commons.util.*;
+import org.json.*;
 import javax.sql.DataSource;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.*;
 import java.sql.*;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.net.MalformedURLException;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 
 public class GenerateIPReservationDao {
+
+    FormatLogIntegrationHistory insertIntegrationHistory = new FormatLogIntegrationHistory();
+    ResponseKafka responseKafka = new ResponseKafka();
+    // Get URL
+    ConnUtil connUtil = new ConnUtil();
+    APIConfig apiConfig = new APIConfig();
+
     DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
+
     //====================================
     // Insert to table INTEGRATION_HISTORY
     //====================================
@@ -47,13 +46,13 @@ public class GenerateIPReservationDao {
         }
     }
 
-    public JSONObject checkWospecReservation(String wonum)  throws SQLException, JSONException {
+    public JSONObject checkWospecReservation(String wonum) throws SQLException, JSONException {
         JSONObject resultObj = new JSONObject();
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
         String query = "SELECT c_assetattrid, c_value FROM app_fd_workorderspec WHERE c_wonum = ? AND c_assetattrid IN ('WAN-RESERVATIONID','LAN-RESERVATIONID')";
 
         try (Connection con = ds.getConnection();
-             PreparedStatement ps = con.prepareStatement(query)) {
+                PreparedStatement ps = con.prepareStatement(query)) {
             ps.setString(1, wonum);
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
@@ -66,13 +65,13 @@ public class GenerateIPReservationDao {
         return resultObj;
     }
 
-    public JSONObject checkWospecReservation2(String wonum)  throws SQLException, JSONException {
+    public JSONObject checkWospecReservation2(String wonum) throws SQLException, JSONException {
         JSONObject resultObj = new JSONObject();
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
         String query = "SELECT c_assetattrid, c_value FROM app_fd_workorderspec WHERE c_wonum = ? AND c_assetattrid IN ('IPAREA','SERVICE_TYPE','VRF_NAME','VRF_NAME_DOMESTIK', 'CUSTOMERNAME','VRF_NAME_GLOBAL','IPV6_RESOURCE')";
 
         try (Connection con = ds.getConnection();
-             PreparedStatement ps = con.prepareStatement(query)) {
+                PreparedStatement ps = con.prepareStatement(query)) {
             ps.setString(1, wonum);
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
@@ -85,13 +84,13 @@ public class GenerateIPReservationDao {
         return resultObj;
     }
 
-    public JSONObject checkWoAttribute(String parent_wonum)  throws SQLException, JSONException {
+    public JSONObject checkWoAttribute(String parent_wonum) throws SQLException, JSONException {
         JSONObject resultObj = new JSONObject();
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
         String query = "SELECT c_attr_name, c_attr_value FROM app_fd_workorderattribute WHERE c_wonum = ? AND c_attr_name IN ('IPAREA','SERVICE_TYPE','VRF_NAME','VRF_NAME_DOMESTIK', 'CUSTOMERNAME','VRF_NAME_GLOBAL','IPV6_RESOURCE')";
 
         try (Connection con = ds.getConnection();
-             PreparedStatement ps = con.prepareStatement(query)) {
+                PreparedStatement ps = con.prepareStatement(query)) {
             ps.setString(1, parent_wonum);
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
@@ -104,26 +103,26 @@ public class GenerateIPReservationDao {
         return resultObj;
     }
 
-
-    public String getSoapResponse(String wonum, String serviceType, String vrf, String ipType, String ipArea, String cardinality, String packageType){
+    public String getSoapResponse(String wonum, String serviceType, String vrf, String ipType, String ipArea, String cardinality, String packageType) {
 
         String soapRequest = "";
-        if(serviceType.equals("VPN") || serviceType=="VPN IP Global" || serviceType=="VPN IP Business" || serviceType=="VPN IP Domestik"){
+        if (serviceType.equals("VPN") || serviceType == "VPN IP Global" || serviceType == "VPN IP Business" || serviceType == "VPN IP Domestik") {
             LogUtil.info(this.getClass().getName(), "INI VPN : " + serviceType);
-            soapRequest = createSoapRequestVPN(serviceType, vrf,cardinality, ipType);
-        }else if(serviceType.equals("CDN")){
+            soapRequest = createSoapRequestVPN(serviceType, vrf, cardinality, ipType);
+        } else if (serviceType.equals("CDN")) {
             LogUtil.info(this.getClass().getName(), "INI CDN : " + serviceType);
             soapRequest = createSoapRequestVersion(serviceType, vrf, ipType, ipArea, cardinality);
-        }else if(serviceType.equals("TRANSIT")){
+        } else if (serviceType.equals("TRANSIT")) {
             LogUtil.info(this.getClass().getName(), "INI TRANSIT : " + serviceType);
             soapRequest = createSoapReuestAllocateIPV6(serviceType, ipType, ipArea, "6");
-        }else{
+        } else {
             LogUtil.info(this.getClass().getName(), "INI ELSE : " + serviceType);
             soapRequest = createSoapRequest(serviceType, vrf, ipType, ipArea, cardinality);
         }
         LogUtil.info(this.getClass().getName(), "INI REQUEST : " + soapRequest);
+        apiConfig = connUtil.getApiParam("uim_dev");
 
-        String urlres = "http://10.6.28.132:7001/EnterpriseFeasibilityUim/EnterpriseFeasibilityUimHTTP";
+        String urlres = apiConfig.getUrl();
         String message = "";
         try {
             URL url = new URL(urlres);
@@ -134,7 +133,7 @@ public class GenerateIPReservationDao {
             connection.setRequestProperty("Accept", "application/xml");
             connection.setRequestProperty("Content-Type", "text/xml; charset=UTF-8");
             try ( // Write XML
-                  OutputStream outputStream = connection.getOutputStream()) {
+                    OutputStream outputStream = connection.getOutputStream()) {
                 byte[] b = soapRequest.getBytes("UTF-8");
                 outputStream.write(b);
                 outputStream.flush();
@@ -142,7 +141,7 @@ public class GenerateIPReservationDao {
 
             StringBuilder response;
             try ( // Read XML
-                  InputStream inputStream = connection.getInputStream()) {
+                    InputStream inputStream = connection.getInputStream()) {
                 byte[] res = new byte[2048];
                 int i = 0;
                 response = new StringBuilder();
@@ -160,6 +159,13 @@ public class GenerateIPReservationDao {
             JSONObject envelope = temp.getJSONObject("env:Envelope").getJSONObject("env:Body");
             JSONObject service = envelope.getJSONObject("ent:reserveServiceIpSubnetResponse");
             int statusCode = service.getInt("statusCode");
+
+            String status = service.getString("status");
+
+            JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "IPRESERVATION", apiConfig.getUrl(), status, soapRequest, temp.toString());
+            String kafkaRes = formatResponse.toString();
+            responseKafka.IntegrationHistory(kafkaRes);
+            LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
 
             LogUtil.info(this.getClass().getName(), "StatusCode : " + statusCode);
             ListGenerateAttributes listGenerate = new ListGenerateAttributes();
@@ -224,13 +230,14 @@ public class GenerateIPReservationDao {
 //                listGenerate.setMessage(message);
             }
         } catch (Exception e) {
-            message = "FeasibilityUimHTTP Failed.\n"+e.getMessage();
+            message = "FeasibilityUimHTTP Failed.\n" + e.getMessage();
             LogUtil.info(this.getClass().getName(), "Trace error here :" + e.getMessage());
         }
 
         return message;
     }
-    public String callGenerateConnectivity(String wonum, String parent_wonum, String productName,String detailActCode) throws MalformedURLException, IOException, JSONException {
+
+    public String callGenerateConnectivity(String wonum, String parent_wonum, String productName, String detailActCode) throws MalformedURLException, IOException, JSONException {
         String result = "";
         try {
             JSONObject checkWoSpecRes = checkWospecReservation(wonum);
@@ -241,79 +248,79 @@ public class GenerateIPReservationDao {
 
             JSONObject checkWoAttr = checkWoAttribute(parent_wonum);
             LogUtil.info(this.getClass().getName(), "checkWoAttr: " + checkWoAttr);
-            if(checkWoSpecRes.length()>0) {
-                packageName =checkWoSpecRes.has("Package_Name")? checkWoSpecRes.get("Package_Name").toString():null;
-                packageAja =checkWoSpecRes.has("Package")? checkWoSpecRes.get("Package").toString():null;
+            if (checkWoSpecRes.length() > 0) {
+                packageName = checkWoSpecRes.has("Package_Name") ? checkWoSpecRes.get("Package_Name").toString() : null;
+                packageAja = checkWoSpecRes.has("Package") ? checkWoSpecRes.get("Package").toString() : null;
                 LogUtil.info(this.getClass().getName(), "packageName" + packageName);
                 LogUtil.info(this.getClass().getName(), "packageAja" + packageAja);
             }
 
-            if(checkWoSpecRes.length()>0) {
+            if (checkWoSpecRes.length() > 0) {
                 LogUtil.info(this.getClass().getName(), "checkWospecReservation : " + checkWoSpecRes);
-                String wanRESERVATIONID = checkWoSpecRes.has("WAN-RESERVATIONID")? checkWoSpecRes.get("WAN-RESERVATIONID").toString():null;
-                String lanRESERVATIONID = checkWoSpecRes.has("LAN-RESERVATIONID")? checkWoSpecRes.get("LAN-RESERVATIONID").toString():null;
+                String wanRESERVATIONID = checkWoSpecRes.has("WAN-RESERVATIONID") ? checkWoSpecRes.get("WAN-RESERVATIONID").toString() : null;
+                String lanRESERVATIONID = checkWoSpecRes.has("LAN-RESERVATIONID") ? checkWoSpecRes.get("LAN-RESERVATIONID").toString() : null;
                 LogUtil.info(this.getClass().getName(), "wanRESERVATIONID" + wanRESERVATIONID);
                 LogUtil.info(this.getClass().getName(), "lanRESERVATIONID" + lanRESERVATIONID);
-                if (wanRESERVATIONID.isEmpty() || lanRESERVATIONID.isEmpty()){
+                if (wanRESERVATIONID.isEmpty() || lanRESERVATIONID.isEmpty()) {
                     JSONObject checkWoSpecRes2 = checkWospecReservation2(wonum);
-                    String ipArea = checkWoSpecRes2.has("IPAREA")? checkWoSpecRes2.get("IPAREA").toString():null;
-                    String serviceType = checkWoSpecRes2.has("SERVICE_TYPE")? checkWoSpecRes2.get("SERVICE_TYPE").toString():null;
-                    String vrf = checkWoSpecRes2.has("VRF_NAME")? checkWoSpecRes2.get("VRF_NAME").toString():null;
-                    String vrfGlobal = checkWoSpecRes2.has("VRF_NAME_GLOBAL")? checkWoSpecRes2.get("VRF_NAME_GLOBAL").toString():null;
-                    String vrfDomestik = checkWoSpecRes2.has("VRF_NAME_DOMESTIK")? checkWoSpecRes2.get("VRF_NAME_DOMESTIK").toString():null;
-                    String customername = checkWoSpecRes2.has("CUSTOMERNAME")? checkWoSpecRes2.get("CUSTOMERNAME").toString():null;
-                    String ipv6resource = checkWoSpecRes2.has("IPV6_RESOURCE")? checkWoSpecRes2.get("IPV6_RESOURCE").toString():null;
+                    String ipArea = checkWoSpecRes2.has("IPAREA") ? checkWoSpecRes2.get("IPAREA").toString() : null;
+                    String serviceType = checkWoSpecRes2.has("SERVICE_TYPE") ? checkWoSpecRes2.get("SERVICE_TYPE").toString() : null;
+                    String vrf = checkWoSpecRes2.has("VRF_NAME") ? checkWoSpecRes2.get("VRF_NAME").toString() : null;
+                    String vrfGlobal = checkWoSpecRes2.has("VRF_NAME_GLOBAL") ? checkWoSpecRes2.get("VRF_NAME_GLOBAL").toString() : null;
+                    String vrfDomestik = checkWoSpecRes2.has("VRF_NAME_DOMESTIK") ? checkWoSpecRes2.get("VRF_NAME_DOMESTIK").toString() : null;
+                    String customername = checkWoSpecRes2.has("CUSTOMERNAME") ? checkWoSpecRes2.get("CUSTOMERNAME").toString() : null;
+                    String ipv6resource = checkWoSpecRes2.has("IPV6_RESOURCE") ? checkWoSpecRes2.get("IPV6_RESOURCE").toString() : null;
                     LogUtil.info(this.getClass().getName(), "checkWoSpecRes2" + checkWoSpecRes2);
 
-                    String resultWAN="";
-                    String resultWANDomestic="";
-                    String resultLAN="";
+                    String resultWAN = "";
+                    String resultWANDomestic = "";
+                    String resultLAN = "";
                     String[] arryTemp = {"Standard", "ASTINet Standard"};
-                    if (ArrayUtils.contains(arryTemp, packageName) && productName=="ASTINET"){
-                        resultWAN= getSoapResponse(wonum, serviceType, vrf, "WAN", ipArea, cardinality, "GLOBAL");
-                        resultWANDomestic=getSoapResponse(wonum, serviceType, vrfDomestik, "WAN", ipArea, cardinality, "DOMESTIK");
-                        resultLAN= getSoapResponse(wonum, serviceType, vrf, "LAN", ipArea, cardinality, "GLOBAL");
+                    if (ArrayUtils.contains(arryTemp, packageName) && productName == "ASTINET") {
+                        resultWAN = getSoapResponse(wonum, serviceType, vrf, "WAN", ipArea, cardinality, "GLOBAL");
+                        resultWANDomestic = getSoapResponse(wonum, serviceType, vrfDomestik, "WAN", ipArea, cardinality, "DOMESTIK");
+                        resultLAN = getSoapResponse(wonum, serviceType, vrf, "LAN", ipArea, cardinality, "GLOBAL");
 
                     }
 
-                    String[] arryTemp2 = {"ASTINet SME","ASTINet Fit SDWAN"};
-                    if (ArrayUtils.contains(arryTemp2, packageName) && productName=="ASTINET"){
-                        resultLAN=getSoapResponse(wonum, serviceType, vrf, "LAN", ipArea, cardinality,"GLOBAL");
+                    String[] arryTemp2 = {"ASTINet SME", "ASTINet Fit SDWAN"};
+                    if (ArrayUtils.contains(arryTemp2, packageName) && productName == "ASTINET") {
+                        resultLAN = getSoapResponse(wonum, serviceType, vrf, "LAN", ipArea, cardinality, "GLOBAL");
                         deleteWorkorderspec(wonum, "WAN%");
                     }
 
-                    if (packageName=="Telkom Metro-E Bisnis Paket Gold" && productName=="Telkom Metro Node"){
-                        resultWAN= getSoapResponse(wonum, serviceType, vrf, "WAN", ipArea, cardinality, "GLOBAL");
-                        resultLAN= getSoapResponse(wonum, serviceType, vrf, "LAN", ipArea, cardinality, "GLOBAL");
+                    if (packageName == "Telkom Metro-E Bisnis Paket Gold" && productName == "Telkom Metro Node") {
+                        resultWAN = getSoapResponse(wonum, serviceType, vrf, "WAN", ipArea, cardinality, "GLOBAL");
+                        resultLAN = getSoapResponse(wonum, serviceType, vrf, "LAN", ipArea, cardinality, "GLOBAL");
                         LogUtil.info(this.getClass().getName(), "resultWAN" + resultWAN);
                         LogUtil.info(this.getClass().getName(), "resultLAN" + resultLAN);
                         deleteWorkorderspec(wonum, "DOMESTIK%");
                     }
 
-                    if (packageName.contains("CDN Connectivity") && productName=="IP TRANSIT" && detailActCode=="Allocate IPV6 Address"){
-                        if (ipv6resource=="Customer" || ipv6resource=="CUSTOMER" || ipv6resource=="IPv6 by Customer"){
+                    if (packageName.contains("CDN Connectivity") && productName == "IP TRANSIT" && detailActCode == "Allocate IPV6 Address") {
+                        if (ipv6resource == "Customer" || ipv6resource == "CUSTOMER" || ipv6resource == "IPv6 by Customer") {
 
-                            resultWAN=getSoapResponse(wonum, serviceType, vrfGlobal, "WAN", "ALL", "6", "GLOBAL");
-                        }else if(ipv6resource=="Telkom" || ipv6resource=="TELKOM" || ipv6resource=="IPv6 by Telkom"){
-                            resultWAN=getSoapResponse(wonum, serviceType, vrfGlobal, "WAN", "ALL", "6", "GLOBAL");
-                            resultLAN=getSoapResponse(wonum, serviceType, vrfGlobal, "LAN", ipArea, "6", "GLOBAL");
+                            resultWAN = getSoapResponse(wonum, serviceType, vrfGlobal, "WAN", "ALL", "6", "GLOBAL");
+                        } else if (ipv6resource == "Telkom" || ipv6resource == "TELKOM" || ipv6resource == "IPv6 by Telkom") {
+                            resultWAN = getSoapResponse(wonum, serviceType, vrfGlobal, "WAN", "ALL", "6", "GLOBAL");
+                            resultLAN = getSoapResponse(wonum, serviceType, vrfGlobal, "LAN", ipArea, "6", "GLOBAL");
                         }
                     }
 
-                    if (packageName.contains("CDN Connectivity") && productName=="IP TRANSIT" || detailActCode=="Allocate IP Private Address"){
-                        resultLAN=getSoapResponse(wonum, serviceType, vrfGlobal, "LAN", ipArea, "4", "GLOBAL");
+                    if (packageName.contains("CDN Connectivity") && productName == "IP TRANSIT" || detailActCode == "Allocate IP Private Address") {
+                        resultLAN = getSoapResponse(wonum, serviceType, vrfGlobal, "LAN", ipArea, "4", "GLOBAL");
                     }
 
-                    String[] arryTemp3 = {"IP Transit Bedabandwidth","IP Transit Beda bandwidth"};
-                    String[] arryTemp31 = {"IP Transit Bedabandwidth","IP Transit Beda bandwidth","CDN Connectivity"};
-                    if (ArrayUtils.contains(arryTemp3, packageName)  && productName=="IP TRANSIT"){
+                    String[] arryTemp3 = {"IP Transit Bedabandwidth", "IP Transit Beda bandwidth"};
+                    String[] arryTemp31 = {"IP Transit Bedabandwidth", "IP Transit Beda bandwidth", "CDN Connectivity"};
+                    if (ArrayUtils.contains(arryTemp3, packageName) && productName == "IP TRANSIT") {
                         LogUtil.info(this.getClass().getName(), "masuk 1" + packageName);
-                        resultWAN=getSoapResponse(wonum, "TRANSIT", customername, "WAN", ipArea, cardinality, "GLOBAL");
-                        resultWANDomestic=getSoapResponse(wonum, "TRANSIT", vrfDomestik, "WAN", ipArea, cardinality, "DOMESTIK");
-                    }else if(!ArrayUtils.contains(arryTemp31, packageName) && productName=="IP TRANSIT"){
+                        resultWAN = getSoapResponse(wonum, "TRANSIT", customername, "WAN", ipArea, cardinality, "GLOBAL");
+                        resultWANDomestic = getSoapResponse(wonum, "TRANSIT", vrfDomestik, "WAN", ipArea, cardinality, "DOMESTIK");
+                    } else if (!ArrayUtils.contains(arryTemp31, packageName) && productName == "IP TRANSIT") {
                         LogUtil.info(this.getClass().getName(), "masuk 2" + packageName);
                         //if not contain arryTemp31
-                        resultWAN=getSoapResponse(wonum, "TRANSIT", customername, "WAN", ipArea, cardinality, "GLOBAL");
+                        resultWAN = getSoapResponse(wonum, "TRANSIT", customername, "WAN", ipArea, cardinality, "GLOBAL");
                         deleteWorkorderspec(wonum, "DOMESTIK%");
                     }
                     LogUtil.info(this.getClass().getName(), "packageName: " + packageName);
@@ -324,45 +331,46 @@ public class GenerateIPReservationDao {
                     LogUtil.info(this.getClass().getName(), "resultWANDomestic" + resultWANDomestic);
                     LogUtil.info(this.getClass().getName(), "resultLAN" + resultLAN);
 
-                    if (resultWAN=="" && resultLAN=="" && resultWANDomestic==""){
-                        result="IP Reservation Failed for WAN/LAN.";
-                    }else{
-                        result="Refresh/Reopen order to view the changes.";
+                    if (resultWAN == "" && resultLAN == "" && resultWANDomestic == "") {
+                        result = "IP Reservation Failed for WAN/LAN.";
+                    } else {
+                        result = "Refresh/Reopen order to view the changes.";
                     }
-                }else{
-                    result="IP is already reserved. Refresh/Reopen order to view the IP reservation.";
+                } else {
+                    result = "IP is already reserved. Refresh/Reopen order to view the IP reservation.";
                 }
             }
         } catch (Exception e) {
-            result = "Error msg:\n"+e.getMessage();
+            result = "Error msg:\n" + e.getMessage();
             LogUtil.error(getClass().getName(), e, "Call Failed." + e);
         }
         return result;
 
     }
-    public boolean deleteWorkorderspec(String wonum, String tipe){
+
+    public boolean deleteWorkorderspec(String wonum, String tipe) {
         boolean status = false;
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
         String queryDelete = "DELETE FROM app_fd_workorderspec WHERE c_wonum = ? AND c_assetattrid=?";
 
         try (Connection con = ds.getConnection();
-             PreparedStatement ps = con.prepareStatement(queryDelete)) {
+                PreparedStatement ps = con.prepareStatement(queryDelete)) {
             ps.setString(1, wonum);
             ps.setString(2, tipe);
 
-            int count= ps.executeUpdate();
-            if(count>0){
+            int count = ps.executeUpdate();
+            if (count > 0) {
                 status = true;
             }
         } catch (SQLException e) {
             LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
         }
 
-        LogUtil.info(getClass().getName(), "Status Delete : "+status);
+        LogUtil.info(getClass().getName(), "Status Delete : " + status);
         return status;
     }
 
-    public boolean updateWorkOrderSpec(String wonum, ListGenerateAttributes listGenerateAttributes,String ipType, String serviceType, String cardinality) throws SQLException{
+    public boolean updateWorkOrderSpec(String wonum, ListGenerateAttributes listGenerateAttributes, String ipType, String serviceType, String cardinality) throws SQLException {
         boolean status = false;
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
 
@@ -431,7 +439,7 @@ public class GenerateIPReservationDao {
                 } else {
                     LogUtil.info(getClass().getName(), "Gagal merubah data");
                 }
-            }else{
+            } else {
                 LogUtil.info(getClass().getName(), "Disconnect");
             }
         } catch (SQLException e) {
@@ -443,7 +451,7 @@ public class GenerateIPReservationDao {
         return status;
     }
 
-    public boolean updateCVALUE(String wonum, String c_assetattrid,String valueUpdate, Connection con) throws SQLException {
+    public boolean updateCVALUE(String wonum, String c_assetattrid, String valueUpdate, Connection con) throws SQLException {
         boolean status = false;
 
         String queryUpdate = "UPDATE APP_FD_WORKORDERSPEC SET c_value= ? WHERE c_wonum = ? AND c_assetattrid = ?";
@@ -451,24 +459,24 @@ public class GenerateIPReservationDao {
         ps.setString(1, valueUpdate);
         ps.setString(2, wonum);
         ps.setString(3, c_assetattrid);
-        int count= ps.executeUpdate();
-        if(count>0){
+        int count = ps.executeUpdate();
+        if (count > 0) {
             status = true;
         }
-        LogUtil.info(getClass().getName(), "Status Update : "+status);
+        LogUtil.info(getClass().getName(), "Status Update : " + status);
         return status;
     }
 
-    public String createSoapRequestVPN(String serviceType, String name, String cardinality, String ipType){
+    public String createSoapRequestVPN(String serviceType, String name, String cardinality, String ipType) {
         String request = "<soapenv:Envelope xmlns:ent=\"http://xmlns.oracle.com/communications/inventory/webservice/enterpriseFeasibility\"\n"
                 + "                  xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\">\n"
                 + "    <soapenv:Body>\n"
                 + "        <ent:reserveServiceIpSubnetRequest>\n"
-                + "            <ServiceType>"+serviceType+"</ServiceType>\n"
+                + "            <ServiceType>" + serviceType + "</ServiceType>\n"
                 + "            <SubnetReservation> \n"
-                + "                 <name>"+name+"</name>\n"
-                + "                 <Cardinality>"+cardinality+"</Cardinality>\n"
-                + "                 <IpType>"+ipType+"</IpType>\n"
+                + "                 <name>" + name + "</name>\n"
+                + "                 <Cardinality>" + cardinality + "</Cardinality>\n"
+                + "                 <IpType>" + ipType + "</IpType>\n"
                 + "            </SubnetReservation> \n"
                 + "        </ent:reserveServiceIpSubnetRequest>\n"
                 + "    </soapenv:Body>\n"
@@ -476,17 +484,17 @@ public class GenerateIPReservationDao {
         return request;
     }
 
-    public String createSoapRequestVersion(String serviceType, String vrf, String ipType, String ipArea, String ipVersion){
+    public String createSoapRequestVersion(String serviceType, String vrf, String ipType, String ipArea, String ipVersion) {
         String request = "<soapenv:Envelope xmlns:ent=\"http://xmlns.oracle.com/communications/inventory/webservice/enterpriseFeasibility\"\n"
                 + "                  xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\">\n"
                 + "    <soapenv:Body>\n"
                 + "        <ent:reserveServiceIpSubnetRequest>\n"
-                + "            <ServiceType>"+serviceType+"</ServiceType>\n"
+                + "            <ServiceType>" + serviceType + "</ServiceType>\n"
                 + "            <SubnetReservation> \n"
-                + "                 <VRF>"+vrf+"</VRF>\n"
-                + "                 <IpType>"+ipType+"</IpType>\n"
-                + "                 <IpArea>"+ipArea+"</IpArea>\n"
-                + "                 <IPVersion>"+ipVersion+"</IPVersion>\n"
+                + "                 <VRF>" + vrf + "</VRF>\n"
+                + "                 <IpType>" + ipType + "</IpType>\n"
+                + "                 <IpArea>" + ipArea + "</IpArea>\n"
+                + "                 <IPVersion>" + ipVersion + "</IPVersion>\n"
                 + "            </SubnetReservation> \n"
                 + "        </ent:reserveServiceIpSubnetRequest>\n"
                 + "    </soapenv:Body>\n"
@@ -494,16 +502,16 @@ public class GenerateIPReservationDao {
         return request;
     }
 
-    public String createSoapReuestAllocateIPV6(String serviceType, String ipType, String ipArea, String ipVersion){
+    public String createSoapReuestAllocateIPV6(String serviceType, String ipType, String ipArea, String ipVersion) {
         String request = "<soapenv:Envelope xmlns:ent=\"http://xmlns.oracle.com/communications/inventory/webservice/enterpriseFeasibility\"\n"
                 + "                  xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\">\n"
                 + "    <soapenv:Body>\n"
                 + "        <ent:reserveServiceIpSubnetRequest>\n"
-                + "            <ServiceType>"+serviceType+"</ServiceType>\n"
+                + "            <ServiceType>" + serviceType + "</ServiceType>\n"
                 + "            <SubnetReservation> \n"
-                + "                 <IpType>"+ipType+"</IpType>\n"
-                + "                 <IpArea>"+ipArea+"</IpArea>\n"
-                + "                 <IPVersion>"+ipVersion+"</IPVersion>\n"
+                + "                 <IpType>" + ipType + "</IpType>\n"
+                + "                 <IpArea>" + ipArea + "</IpArea>\n"
+                + "                 <IPVersion>" + ipVersion + "</IPVersion>\n"
                 + "            </SubnetReservation> \n"
                 + "        </ent:reserveServiceIpSubnetRequest>\n"
                 + "    </soapenv:Body>\n"
@@ -511,17 +519,17 @@ public class GenerateIPReservationDao {
         return request;
     }
 
-    public String createSoapRequest(String serviceType, String vrf, String ipType, String ipArea, String cardinality){
+    public String createSoapRequest(String serviceType, String vrf, String ipType, String ipArea, String cardinality) {
         String request = "<soapenv:Envelope xmlns:ent=\"http://xmlns.oracle.com/communications/inventory/webservice/enterpriseFeasibility\"\n"
                 + "                  xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\">\n"
                 + "    <soapenv:Body>\n"
                 + "        <ent:reserveServiceIpSubnetRequest>\n"
-                + "            <ServiceType>"+serviceType+"</ServiceType>\n"
+                + "            <ServiceType>" + serviceType + "</ServiceType>\n"
                 + "            <SubnetReservation> \n"
-                + "                 <VRF>"+vrf+"</VRF>\n"
-                + "                 <IpType>"+ipType+"</IpType>\n"
-                + "                 <IpArea>"+ipArea+"</IpArea>\n"
-                + "                 <Cardinality>"+cardinality+"</Cardinality>\n"
+                + "                 <VRF>" + vrf + "</VRF>\n"
+                + "                 <IpType>" + ipType + "</IpType>\n"
+                + "                 <IpArea>" + ipArea + "</IpArea>\n"
+                + "                 <Cardinality>" + cardinality + "</Cardinality>\n"
                 + "            </SubnetReservation> \n"
                 + "        </ent:reserveServiceIpSubnetRequest>\n"
                 + "    </soapenv:Body>\n"

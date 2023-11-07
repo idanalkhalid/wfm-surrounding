@@ -7,7 +7,6 @@ package id.co.telkom.wfm.plugin.dao;
 
 import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
 import id.co.telkom.wfm.plugin.util.CallUIM;
-import id.co.telkom.wfm.plugin.util.RequestAPI;
 import java.io.*;
 import java.net.*;
 import java.sql.*;
@@ -25,8 +24,8 @@ public class GenerateIpV4Dao {
     // Get datas and set into ListGenerateAttributes
 
     ListGenerateAttributes listAttribute = new ListGenerateAttributes();
+
     CallUIM callUIM = new CallUIM();
-    RequestAPI requestUtil = new RequestAPI();
 
     String[] listProductname = {"VPN IP Global", "VPN", "VPN IP Bisnis Paket Gold"};
     String[] listPackageName = {"IP Transit Bedabandwidth", "IP Transit Beda bandwidth"};
@@ -194,30 +193,31 @@ public class GenerateIpV4Dao {
     // Call API Surrounding Generate STP Net Loc
     public JSONObject getResponseVpn(String wonum) throws JSONException, IOException, MalformedURLException, Exception {
         JSONObject assetattributes = getAssetattrid(wonum);
-        String request = requestUtil.requestVPN(wonum);
-
-        JSONObject temp = callUIM.callUIM(request);
+        String request = requestVPN(wonum);
+        JSONObject temp = callUIM.callUIM(request, "uim_dev");
 
         // Parsing data response
         LogUtil.info(this.getClass().getName(), "############ Parsing Data Response ##############");
 
         JSONObject envelope = temp.getJSONObject("env:Envelope").getJSONObject("env:Body");
-        JSONObject subnetReserved = envelope.getJSONObject("ent:reserveServiceIpSubnetResponse").getJSONObject("SubnetReserved");
-        String gateawayAddress = subnetReserved.getString("GatewayAddress");
-        String serviceIp = subnetReserved.getString("ServiceIp");
-        String ipDomain = subnetReserved.getString("IpDomain");
-        String networkAddress = subnetReserved.getString("NetworkAddress");
-        String reservationID = subnetReserved.getString("reservationID");
-        String vrf = subnetReserved.getString("VRF");
-        String subnetMask = subnetReserved.getString("SubnetMask");
-        String netMask = subnetReserved.getString("NetMask");
-        int statusCode = subnetReserved.getInt("statusCode");
+        JSONObject subnetResponse = envelope.getJSONObject("ent:reserveServiceIpSubnetResponse");
 
-        LogUtil.info(this.getClass().getName(), "DATA : " + gateawayAddress + serviceIp + ipDomain + networkAddress + reservationID + vrf + subnetMask + netMask);
+        int statusCode = subnetResponse.getInt("statusCode");
 
         if (statusCode != 4001) {
             LogUtil.info(this.getClass().getName(), "Status Message from api");
         } else {
+            JSONObject subnetReserved = subnetResponse.getJSONObject("SubnetReserved");
+            String gateawayAddress = subnetReserved.getString("GatewayAddress");
+            String serviceIp = subnetReserved.getString("ServiceIp");
+            String ipDomain = subnetReserved.getString("IpDomain");
+            String networkAddress = subnetReserved.getString("NetworkAddress");
+            String reservationID = subnetReserved.getString("reservationID");
+            String vrf = subnetReserved.getString("VRF");
+            String subnetMask = subnetReserved.getString("SubnetMask");
+            String netMask = subnetReserved.getString("NetMask");
+            
+            LogUtil.info(this.getClass().getName(), "DATA : " + gateawayAddress + serviceIp + ipDomain + networkAddress + reservationID + vrf + subnetMask + netMask);
             String message = "";
             String gateawayaddress = assetattributes.optString("WAN-GATEAWAYADDRESS");
             String ipdomain = assetattributes.optString("WAN-IPDOMAIN");
@@ -254,8 +254,8 @@ public class GenerateIpV4Dao {
     // Request ASTINET, ASTINET SME, dan TRANSIT 
     private JSONObject getResponse(String wonum, String serviceType, String vrf, String ipType, String ipArea, String ipVersion, String packageType) throws MalformedURLException, IOException, JSONException, SQLException {
         JSONObject assetattributes = getAssetattrid(wonum);
-        String request = requestUtil.requestIpV4(serviceType, vrf, ipType, ipArea, ipVersion, packageType);
-        JSONObject temp = callUIM.callUIM(request);
+        String request = requestIpV4(serviceType, vrf, ipType, ipArea, ipVersion, packageType);
+        JSONObject temp = callUIM.callUIM(request, "uim_dev");
 
         JSONObject envelope = temp.getJSONObject("env:Envelope").getJSONObject("env:Body");
         JSONObject subnetReserved = envelope.getJSONObject("ent:reserveServiceIpSubnetResponse").getJSONObject("SubnetReserved");
@@ -354,7 +354,6 @@ public class GenerateIpV4Dao {
 
     public String GenerateIpV4(String wonum) throws JSONException, SQLException, Exception {
         JSONObject attribute = getAttribute(wonum);
-        JSONObject assetattrid = getAssetattrid(wonum);
         JSONObject assetattributes = getAssetattrid(wonum);
         JSONObject woSpecReservation = getWoSpecReservation(wonum);
         JSONObject workorderAttribute = getWorkorderAttribute(attribute.optString("parent"));
@@ -367,16 +366,16 @@ public class GenerateIpV4Dao {
         String resultWANDomestik = "";
         String productname = attribute.optString("productname");
         String detailactcode = attribute.optString("detailactcode");
-        String serviceType = assetattrid.optString("SERVICE_TYPE");
-        String vrf = assetattrid.optString("VRF_NAME");
-        String vrfDomestik = assetattrid.optString("VRF_NAME_DOMESTIK");
-        String ipArea = assetattrid.optString("IPAREA");
+        String serviceType = assetattributes.optString("SERVICE_TYPE");
+        String vrf = assetattributes.optString("VRF_NAME");
+        String vrfDomestik = assetattributes.optString("VRF_NAME_DOMESTIK");
+        String ipArea = assetattributes.optString("IPAREA");
 
         if (workorderAttribute != null) {
             packageName = workorderAttribute.optString("value");
         }
         if (assetattributes != null) {
-            if (!woSpecReservation.isNull("value")) {
+            if (!woSpecReservation.equals("") || !woSpecReservation.equals("None")) {
                 msg = "IP is already reserved. Refresh/Reopen order to view the IP reservation.";
             } else {
                 if (Arrays.asList(listProductname).contains(productname) && Arrays.asList(listDetailactcode).contains(detailactcode)) {
@@ -404,12 +403,68 @@ public class GenerateIpV4Dao {
                 }
             }
         }
-        
+
         if (resultWAN.equals("") && resultWANDomestik.equals("") && resultLAN.equals("")) {
             msg = "IP Reservation Failed for WAN/LAN.";
         } else {
             msg = "Refresh/Reopen order to view the changes";
         }
         return msg;
+    }
+
+    private String requestVPN(String wonum) throws JSONException, SQLException {
+        JSONObject assetattributes = getAssetattrid(wonum);
+        String route = assetattributes.optString("RD");
+        String serviceType = assetattributes.optString("SERVICE_TYPE");
+        String vrf = assetattributes.optString("VRF_NAME");
+        String rtImport = assetattributes.optString("RT_IMPORT");
+        String rtExport = assetattributes.optString("RT_EXPORT");
+
+        String request = "<soapenv:Envelope xmlns:ent=\"http://xmlns.oracle.com/communications/inventory/webservice/enterpriseFeasibility\"\n"
+                + "                  xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\">\n"
+                + "    <soapenv:Body>\n"
+                + "        <ent:reserveServiceIpSubnetRequest>\n"
+                + "            <ServiceType>" + serviceType + "</ServiceType>\n"
+                + "            <SubnetReservation>\n"
+                + "                <VRF>" + vrf + "</VRF>\n"
+                + "                <RouteDistinguisher>" + route + "</RouteDistinguisher>\n"
+                + "                <RT_Import>" + rtImport + "</RT_Import>\n"
+                + "                <RT_Export>" + rtExport + "</RT_Export>\n"
+                + "                \n"
+                + "            </SubnetReservation>            \n"
+                + "        </ent:reserveServiceIpSubnetRequest>\n"
+                + "    </soapenv:Body>\n"
+                + "</soapenv:Envelope>";
+
+        return request;
+    }
+
+    public String requestIpV4(String serviceType, String vrf, String ipType, String ipArea, String ipVersion, String packageType) {
+        String request1 = null;
+        String request2 = null;
+        String request3 = null;
+        String request = "<soapenv:Envelope xmlns:ent=\"http://xmlns.oracle.com/communications/inventory/webservice/enterpriseFeasibility\"\n"
+                + "                  xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\">\n"
+                + "    <soapenv:Body>\n"
+                + "        <ent:reserveServiceIpSubnetRequest>\n"
+                + "            <ServiceType>VPNIP</ServiceType>\n"
+                + "            <SubnetReservation>\n";
+        if ("".equals(vrf)) {
+            request1 = "<VRF>" + vrf + "</VRF>\n"
+                    + "                <IpType>" + ipType + "</IpType>\n"
+                    + "                <IpArea>" + ipArea + "</IpArea>\n";
+        }
+        if (serviceType.equals("ASTINET") || serviceType.equals("ASTINET SME")) {
+            request2 = "<IPVersion>" + ipVersion + "</IPVersion>\n";
+        } else if (serviceType == "TRANSIT") {
+            request3 = "<Type>" + ipVersion + "</Type>\n"
+                    + "            </SubnetReservation>            \n"
+                    + "        </ent:reserveServiceIpSubnetRequest>\n"
+                    + "    </soapenv:Body>\n"
+                    + "</soapenv:Envelope>";
+        }
+        String RequestAll = request + request1 + request2 + request3;
+
+        return RequestAll;
     }
 }
