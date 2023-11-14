@@ -1,5 +1,9 @@
 package id.co.telkom.wfm.plugin.dao;
 
+import id.co.telkom.wfm.plugin.kafka.ResponseKafka;
+import id.co.telkom.wfm.plugin.model.APIConfig;
+import id.co.telkom.wfm.plugin.util.ConnUtil;
+import id.co.telkom.wfm.plugin.util.FormatLogIntegrationHistory;
 import id.co.telkom.wfm.plugin.util.TimeUtil;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.commons.util.LogUtil;
@@ -16,19 +20,24 @@ import java.sql.*;
 import java.util.Date;
 
 public class GenerateUplinkPortDao {
+
     TimeUtil time = new TimeUtil();
-    public JSONObject getAssetattrid(String wonum) throws SQLException, JSONException {
+    FormatLogIntegrationHistory insertIntegrationHistory = new FormatLogIntegrationHistory();
+    ResponseKafka responseKafka = new ResponseKafka();
+    ConnUtil connUtil = new ConnUtil();
+    APIConfig apiConfig = new APIConfig();
+
+    private JSONObject getAssetattrid(String wonum) throws SQLException, JSONException {
         JSONObject resultObj = new JSONObject();
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
         String query = "SELECT c_assetattrid, c_value FROM app_fd_workorderspec WHERE c_wonum = ? AND c_assetattrid IN ('AN_NAME')";
-
         try (Connection con = ds.getConnection();
-             PreparedStatement ps = con.prepareStatement(query)) {
+                PreparedStatement ps = con.prepareStatement(query)) {
             ps.setString(1, wonum);
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
-                String tempCValue = rs.getString("c_value").replace(" ", "%20");
-                resultObj.put(rs.getString("c_assetattrid"), tempCValue);
+                resultObj.put(rs.getString("c_assetattrid"), rs.getString("c_value"));
+                LogUtil.info(this.getClass().getName(), "Location : " + resultObj);
             }
         } catch (SQLException e) {
             LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
@@ -36,20 +45,20 @@ public class GenerateUplinkPortDao {
         return resultObj;
     }
 
-    public boolean deletetkDeviceattribute(String wonum, Connection con) throws SQLException{
+    private boolean deletetkDeviceattribute(String wonum, Connection con) throws SQLException {
         boolean status = false;
         String queryDelete = "DELETE FROM app_fd_tk_deviceattribute WHERE c_ref_num = ?";
         PreparedStatement ps = con.prepareStatement(queryDelete);
         ps.setString(1, wonum);
-        int count= ps.executeUpdate();
-        if(count>0){
+        int count = ps.executeUpdate();
+        if (count > 0) {
             status = true;
         }
-        LogUtil.info(getClass().getName(), "Status Delete : "+status);
+        LogUtil.info(getClass().getName(), "Status Delete : " + status);
         return status;
     }
 
-    public boolean updatetkDeviceattribute(String wonum, String description, String attr_type, String attr_name, Connection con) throws SQLException{
+    private boolean updatetkDeviceattribute(String wonum, String description, String attr_type, String attr_name, Connection con) throws SQLException {
         boolean status = false;
         Date date = new Date();
         Timestamp timestamp = new Timestamp(date.getTime());
@@ -64,11 +73,11 @@ public class GenerateUplinkPortDao {
         ps.setString(5, wonum);
         ps.setTimestamp(6, timestamp);
         ps.setTimestamp(7, timestamp);
-        int count= ps.executeUpdate();
-        if(count>0){
+        int count = ps.executeUpdate();
+        if (count > 0) {
             status = true;
         }
-        LogUtil.info(getClass().getName(), "Status Update : "+status);
+        LogUtil.info(getClass().getName(), "Status Update : " + status);
         return status;
     }
 
@@ -76,8 +85,8 @@ public class GenerateUplinkPortDao {
         String msg = "";
         try {
             LogUtil.info(this.getClass().getName(), "\nSending 'GET' request to URL : " + wonum);
-
-            String url = "https://api-emas.telkom.co.id:8443/api/device/ports?" + "deviceName=" + getAssetattrid(wonum).get("AN_NAME").toString().replace(" ", "%20") + "&portPurpose=TRUNK&portStatus=ACTIVE";
+            apiConfig = connUtil.getApiParam("uimax_dev");
+            String url = apiConfig.getUrl() + "api/device/ports?" + "deviceName=" + getAssetattrid(wonum).get("AN_NAME").toString().replace(" ", "%20") + "&portPurpose=TRUNK&portStatus=ACTIVE";
             URL obj = new URL(url);
             HttpURLConnection con = (HttpURLConnection) obj.openConnection();
 
@@ -105,7 +114,7 @@ public class GenerateUplinkPortDao {
                 LogUtil.info(this.getClass().getName(), "STO : " + response);
                 in.close();
 
-                    // At this point, 'response' contains the JSON data as a string
+                // At this point, 'response' contains the JSON data as a string
                 String jsonData = response.toString();
 
                 // Now, parse the JSON data using org.json library
@@ -114,25 +123,25 @@ public class GenerateUplinkPortDao {
                 JSONArray arrayPort = jsonObject.getJSONArray("port");
                 for (int i = 0; i < arrayPort.length(); i++) {
                     JSONObject portObject = arrayPort.getJSONObject(i);
-                    msg=msg+"Portname: "+portObject.getString("name")+"\n";
-                    msg=msg+"Keyname: "+portObject.getString("key")+"\n";
+                    msg = msg + "Portname: " + portObject.getString("name") + "\n";
+                    msg = msg + "Keyname: " + portObject.getString("key") + "\n";
 
                     LogUtil.info(this.getClass().getName(), "Object Port :" + arrayPort.toString());
                     String description = portObject.getString("name");
                     String attr_type = "";
-                    updatetkDeviceattribute(wonum, description, attr_type, "AN_UPLINK_PORTNAME",connection);
+                    updatetkDeviceattribute(wonum, description, attr_type, "AN_UPLINK_PORTNAME", connection);
 
                     description = portObject.getString("key");
                     attr_type = portObject.getString("name");
-                    updatetkDeviceattribute(wonum, description, attr_type, "AN_UPLINK_PORTID",connection);
+                    updatetkDeviceattribute(wonum, description, attr_type, "AN_UPLINK_PORTID", connection);
                 }
-                return "Uplink Port Found\n"+msg;
+                return "Uplink Port Found\n" + msg;
             }
         } catch (Exception e) {
             msg = e.getMessage();
             LogUtil.info(this.getClass().getName(), "Trace error here :" + e.getMessage());
         }
-        return "Uplink Port Not Found\n"+msg;
+        return "Uplink Port Not Found\n" + msg;
     }
 
 }

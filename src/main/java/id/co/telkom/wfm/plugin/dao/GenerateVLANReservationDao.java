@@ -1,5 +1,9 @@
 package id.co.telkom.wfm.plugin.dao;
 
+import id.co.telkom.wfm.plugin.kafka.ResponseKafka;
+import id.co.telkom.wfm.plugin.model.APIConfig;
+import id.co.telkom.wfm.plugin.util.ConnUtil;
+import id.co.telkom.wfm.plugin.util.FormatLogIntegrationHistory;
 import id.co.telkom.wfm.plugin.util.TimeUtil;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.commons.util.LogUtil;
@@ -18,25 +22,31 @@ import java.sql.*;
 import java.util.Date;
 
 public class GenerateVLANReservationDao {
+
     TimeUtil time = new TimeUtil();
-    String peVlan="";
-    String peCVlan="";
-    String peSVlan="";
-    String meCVlan="";
-    String meSVlan="";
-    String meVlan="";
-    String meVCID="";
-    String meServiceVlan="";
-    String meServiceCVlan="";
-    String meServiceSVlan="";
-    String meServiceVCID="";
-    String anVlan="";
-    String anCVlan="";
-    String anSVlan ="";
-    String devicePortPE ="";
-    String devicePortMEService ="";
-    String devicePortME ="";
-    String devicePortAN ="";
+    FormatLogIntegrationHistory insertIntegrationHistory = new FormatLogIntegrationHistory();
+    ResponseKafka responseKafka = new ResponseKafka();
+    ConnUtil connUtil = new ConnUtil();
+    APIConfig apiConfig = new APIConfig();
+
+    String peVlan = "";
+    String peCVlan = "";
+    String peSVlan = "";
+    String meCVlan = "";
+    String meSVlan = "";
+    String meVlan = "";
+    String meVCID = "";
+    String meServiceVlan = "";
+    String meServiceCVlan = "";
+    String meServiceSVlan = "";
+    String meServiceVCID = "";
+    String anVlan = "";
+    String anCVlan = "";
+    String anSVlan = "";
+    String devicePortPE = "";
+    String devicePortMEService = "";
+    String devicePortME = "";
+    String devicePortAN = "";
     String resultVlanReservation = "";
 
     public JSONObject getAssetattrid(String wonum) throws SQLException, JSONException {
@@ -45,7 +55,7 @@ public class GenerateVLANReservationDao {
         String query = "SELECT c_assetattrid, c_value FROM app_fd_workorderspec WHERE c_wonum=? AND c_assetattrid IN ('AN_NAME','AN_UPLINK_PORTNAME', 'AREANAME', 'ME_NAME', 'ME_PORTNAME', 'ME_SERVICE_NAME', 'ME_SERVICE_PORTNAME','PE_NAME','PE_PORTNAME','RESERVATION_ID','SERVICE_TYPE','PE_VLAN','SERVICE_TYPE_VLAN','VLAN_RESERVATION_ID','ME_VLAN','AN_VLAN')";
 
         try (Connection con = ds.getConnection();
-             PreparedStatement ps = con.prepareStatement(query)) {
+                PreparedStatement ps = con.prepareStatement(query)) {
             ps.setString(1, wonum);
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
@@ -58,22 +68,22 @@ public class GenerateVLANReservationDao {
         return resultObj;
     }
 
-    public JSONObject parseDataVLAN(String responseMessage, String deviceNamePE, String deviceNameME, String deviceNameMEService, String deviceNameAN){
+    public JSONObject parseDataVLAN(String responseMessage, String deviceNamePE, String deviceNameME, String deviceNameMEService, String deviceNameAN) {
         JSONObject resultObj = new JSONObject();
 
-        if(deviceNamePE==""){
+        if (deviceNamePE == "") {
 
         }
 
-        if(deviceNameME==""){
+        if (deviceNameME == "") {
 
         }
 
-        if(deviceNameMEService==""){
+        if (deviceNameMEService == "") {
 
         }
 
-        if(deviceNameAN==""){
+        if (deviceNameAN == "") {
 
         }
 
@@ -84,7 +94,7 @@ public class GenerateVLANReservationDao {
 //            String meCVlan, String meSVlan, String meVCID, String meServiceVlan, String meServiceCVlan, String meServiceSVlan,
 //            String meServiceVCID, String anVlan, String anCVlan, String anSVlan, String devicePortPE, String devicePortMEService,
 //                                       String devicePortME, String devicePortAN,Connection con){
-    public boolean updateVLANAttribute(String wonum){
+    public boolean updateVLANAttribute(String wonum) {
         boolean status = false;
         Date date = new Date();
         Timestamp timestamp = new Timestamp(date.getTime());
@@ -114,7 +124,7 @@ public class GenerateVLANReservationDao {
                 .append("ELSE 'ME_CVLAN' END")
                 .append("WHERE c_wonum = ?")
                 .append("AND c_assetattrid IN ('PE_VLAN','PE_CVLAN', 'PE_SVLAN','ME_VLAN','ME_CVLAN', 'ME_SVLAN', 'ME_VCID', 'ME_SERVICE_VLAN','ME_SERVICE_CVLAN', 'ME_SERVICE_SVLAN', 'ME_SERVICE_VCID','AN_VLAN','AN_CVLAN', 'AN_SVLAN', 'PE_SUBINTERFACE', 'ME_SERVICE_SUBINTERFACE' , 'ME_SUBINTERFACE', 'AN_SUBINTERFACE')");
-        try{
+        try {
             Connection con = ds.getConnection();
             PreparedStatement ps = con.prepareStatement(queryUpdate.toString());
 
@@ -132,21 +142,21 @@ public class GenerateVLANReservationDao {
             ps.setString(12, anVlan);
             ps.setString(13, anCVlan);
             ps.setString(14, anSVlan);
-            ps.setString(15, devicePortPE+"."+peVlan);
-            ps.setString(16, devicePortMEService+"."+meServiceVlan);
-            ps.setString(17, devicePortME+"."+meVlan);
-            ps.setString(18, devicePortAN+"."+anVlan);
+            ps.setString(15, devicePortPE + "." + peVlan);
+            ps.setString(16, devicePortMEService + "." + meServiceVlan);
+            ps.setString(17, devicePortME + "." + meVlan);
+            ps.setString(18, devicePortAN + "." + anVlan);
             ps.setString(19, wonum);
 
-            int count= ps.executeUpdate();
-            if(count>0){
+            int count = ps.executeUpdate();
+            if (count > 0) {
                 status = true;
             }
         } catch (Exception e) {
             LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
         }
 
-        LogUtil.info(getClass().getName(), "Status Insert : "+status);
+        LogUtil.info(getClass().getName(), "Status Insert : " + status);
         return status;
     }
 
@@ -156,7 +166,7 @@ public class GenerateVLANReservationDao {
         String query = "SELECT c_attr_name, c_attr_value FROM app_fd_workorderattribute WHERE c_wonum=? AND c_attr_name IN ('Service_Type', 'Package_Name')";
 
         try (Connection con = ds.getConnection();
-             PreparedStatement ps = con.prepareStatement(query)) {
+                PreparedStatement ps = con.prepareStatement(query)) {
             ps.setString(1, wonum);
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
@@ -169,7 +179,7 @@ public class GenerateVLANReservationDao {
         return resultObj;
     }
 
-    public String createRequestReservationWithVCID(JSONArray deviceAndPorts, String reservationId, String serviceType,String sto){
+    public String createRequestReservationWithVCID(JSONArray deviceAndPorts, String reservationId, String serviceType, String sto) {
         String value = "";
         try {
 
@@ -187,34 +197,34 @@ public class GenerateVLANReservationDao {
         return value;
     }
 
-    public boolean unsetVLANAttribute(String wonum, Connection con){
+    public boolean unsetVLANAttribute(String wonum, Connection con) {
         boolean status = false;
         Date date = new Date();
         Timestamp timestamp = new Timestamp(date.getTime());
 
         String uuId = UuidGenerator.getInstance().getUuid();
         String queryUpdate = "UPDATE app_fd_tk_workorderspec SET DATAMODIFIED=?,PE_VLAN='',PE_CVLAN='',PE_SVLAN='',ME_VLAN='',ME_CVLAN='',ME_SVLAN='',ME_VCID='',ME_SERVICE_VLAN='',ME_SERVICE_CVLAN='',ME_SERVICE_SVLAN='',ME_SERVICE_VCID='',AN_VLAN='',AN_CVLAN='',AN_SVLAN='',PE_SUBINTERFACE='',ME_SERVICE_SUBINTERFACE='',ME_SUBINTERFACE='',AN_SUBINTERFACE='' WHERE c_wonum=?";
-        try{
+        try {
             PreparedStatement ps = con.prepareStatement(queryUpdate);
             ps.setTimestamp(1, timestamp);
             ps.setString(2, wonum);
-            int count= ps.executeUpdate();
-            if(count>0){
+            int count = ps.executeUpdate();
+            if (count > 0) {
                 status = true;
             }
         } catch (Exception e) {
             LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
         }
 
-        LogUtil.info(getClass().getName(), "Status Insert : "+status);
+        LogUtil.info(getClass().getName(), "Status Insert : " + status);
         return status;
     }
 
-    public void setSecondVLANVPNAttribute(String wonum){
+    public void setSecondVLANVPNAttribute(String wonum) {
 
     }
 
-    public void setSecondVLANAstinetAttribute(String wonum){
+    public void setSecondVLANAstinetAttribute(String wonum) {
 
     }
 
@@ -226,34 +236,36 @@ public class GenerateVLANReservationDao {
             Connection connection = ds.getConnection();
 
             JSONObject assetAttr = getAssetattrid(wonum);
-            String peVlan =assetAttr.has("PE_VLAN")? assetAttr.get("PE_VLAN").toString():null;
-            String meVlan =assetAttr.has("ME_VLAN")? assetAttr.get("ME_VLAN").toString():null;
-            String reservationId = assetAttr.has("RESERVATION_ID")? assetAttr.get("RESERVATION_ID").toString():assetAttr.has("VLAN_RESERVATION_ID")? assetAttr.get("VLAN_RESERVATION_ID").toString():null;
-            String serviceType = assetAttr.has("SERVICE_TYPE")? assetAttr.get("SERVICE_TYPE").toString():assetAttr.has("SERVICE_TYPE_VLAN")? assetAttr.get("SERVICE_TYPE_VLAN").toString():null;
-            String deviceNameAN = assetAttr.has("AN_NAME")? assetAttr.get("AN_NAME").toString():null;
-            String devicePortAN = assetAttr.has("AN_UPLINK_PORTNAME")? assetAttr.get("AN_UPLINK_PORTNAME").toString():null;
-            String deviceNameME = assetAttr.has("ME_NAME")? assetAttr.get("ME_NAME").toString():null;
-            String devicePortME = assetAttr.has("ME_PORTNAME")? assetAttr.get("ME_PORTNAME").toString():null;
-            String deviceNameMEService = assetAttr.has("ME_SERVICE_NAME")? assetAttr.get("ME_SERVICE_NAME").toString():null;
-            String devicePortMEService = assetAttr.has("ME_SERVICE_PORTNAME")? assetAttr.get("ME_SERVICE_PORTNAME").toString():null;
-            String deviceNamePE = assetAttr.has("PE_NAME")? assetAttr.get("PE_NAME").toString():null;
-            String devicePortPE = assetAttr.has("PE_PORTNAME")? assetAttr.get("PE_PORTNAME").toString():null;
-            String anVlan = assetAttr.has("AN_VLAN")? assetAttr.get("AN_VLAN").toString():null;
-            String sto = assetAttr.has("AREANAME")? assetAttr.get("AREANAME").toString():null;
+            String peVlan = assetAttr.has("PE_VLAN") ? assetAttr.get("PE_VLAN").toString() : null;
+            String meVlan = assetAttr.has("ME_VLAN") ? assetAttr.get("ME_VLAN").toString() : null;
+            String reservationId = assetAttr.has("RESERVATION_ID") ? assetAttr.get("RESERVATION_ID").toString() : assetAttr.has("VLAN_RESERVATION_ID") ? assetAttr.get("VLAN_RESERVATION_ID").toString() : null;
+            String serviceType = assetAttr.has("SERVICE_TYPE") ? assetAttr.get("SERVICE_TYPE").toString() : assetAttr.has("SERVICE_TYPE_VLAN") ? assetAttr.get("SERVICE_TYPE_VLAN").toString() : null;
+            String deviceNameAN = assetAttr.has("AN_NAME") ? assetAttr.get("AN_NAME").toString() : null;
+            String devicePortAN = assetAttr.has("AN_UPLINK_PORTNAME") ? assetAttr.get("AN_UPLINK_PORTNAME").toString() : null;
+            String deviceNameME = assetAttr.has("ME_NAME") ? assetAttr.get("ME_NAME").toString() : null;
+            String devicePortME = assetAttr.has("ME_PORTNAME") ? assetAttr.get("ME_PORTNAME").toString() : null;
+            String deviceNameMEService = assetAttr.has("ME_SERVICE_NAME") ? assetAttr.get("ME_SERVICE_NAME").toString() : null;
+            String devicePortMEService = assetAttr.has("ME_SERVICE_PORTNAME") ? assetAttr.get("ME_SERVICE_PORTNAME").toString() : null;
+            String deviceNamePE = assetAttr.has("PE_NAME") ? assetAttr.get("PE_NAME").toString() : null;
+            String devicePortPE = assetAttr.has("PE_PORTNAME") ? assetAttr.get("PE_PORTNAME").toString() : null;
+            String anVlan = assetAttr.has("AN_VLAN") ? assetAttr.get("AN_VLAN").toString() : null;
+            String sto = assetAttr.has("AREANAME") ? assetAttr.get("AREANAME").toString() : null;
 
             String[] wonum_split = wonum.split(" ");
             String parent_wonum = wonum_split[0];
 
             LogUtil.info(this.getClass().getName(), "\nParrent WOnum : " + parent_wonum);
             JSONObject woAttr = getWorkorderAttribute(parent_wonum);
-            String serviceTypePackage = woAttr.has("Service_Type")? woAttr.get("Service_Type").toString():null;
-            String packageName = woAttr.has("Package")? woAttr.get("Package").toString():null;
+            String serviceTypePackage = woAttr.has("Service_Type") ? woAttr.get("Service_Type").toString() : null;
+            String packageName = woAttr.has("Package") ? woAttr.get("Package").toString() : null;
 
             LogUtil.info(this.getClass().getName(), "\nAssetAttr : " + assetAttr);
             LogUtil.info(this.getClass().getName(), "\nwoATTR : " + woAttr);
-
-            if (peVlan=="None" || meVlan=="None" || peVlan.isEmpty() || meVlan.isEmpty()){
-                String url = "https://api-emas.telkom.co.id:8443/api/vlan/reservationWithVCID";
+            
+            apiConfig = connUtil.getApiParam("uimax_dev");
+           
+            if (peVlan == "None" || meVlan == "None" || peVlan.isEmpty() || meVlan.isEmpty()) {
+                String url = apiConfig.getUrl() + "api/vlan/reservationWithVCID";
 
                 LogUtil.info(this.getClass().getName(), "\nSending 'POST' request to URL 1: " + url);
 
@@ -267,18 +279,18 @@ public class GenerateVLANReservationDao {
 
                 JSONArray deviceAndPorts = new JSONArray();
 
-                try(OutputStream os = con.getOutputStream()) {
-                    byte[] input = createRequestReservationWithVCID(deviceAndPorts, reservationId, serviceType,sto).getBytes("utf-8");
+                try (OutputStream os = con.getOutputStream()) {
+                    byte[] input = createRequestReservationWithVCID(deviceAndPorts, reservationId, serviceType, sto).getBytes("utf-8");
                     os.write(input, 0, input.length);
                 }
                 int responseCode = con.getResponseCode();
-                LogUtil.info(this.getClass().getName(), "\nresponseCode status : "+responseCode);
+                LogUtil.info(this.getClass().getName(), "\nresponseCode status : " + responseCode);
                 if (responseCode == 400) {
                     LogUtil.info(this.getClass().getName(), "STO not found");
                     msg = "UnReserve VLAN Failed";
                 } else if (responseCode == 200) {
                     StringBuilder response;
-                    try(BufferedReader br = new BufferedReader(
+                    try (BufferedReader br = new BufferedReader(
                             new InputStreamReader(con.getInputStream(), "utf-8"))) {
                         response = new StringBuilder();
                         String responseLine = null;
@@ -287,13 +299,13 @@ public class GenerateVLANReservationDao {
                         }
                     }
 
-                    LogUtil.info(this.getClass().getName(), "\nresponse: "+response.toString());
+                    LogUtil.info(this.getClass().getName(), "\nresponse: " + response.toString());
                     parseDataVLAN(response.toString(), deviceNamePE, deviceNameME, deviceNameMEService, deviceNameAN);
                     updateVLANAttribute(wonum);
-                    msg = ("Generate VLAN Success.\n"+"Refresh/Reopen the order to view the VLAN Detail.\n"+resultVlanReservation);
+                    msg = ("Generate VLAN Success.\n" + "Refresh/Reopen the order to view the VLAN Detail.\n" + resultVlanReservation);
 
                 }
-                if ((serviceType=="VPN" && serviceTypePackage=="VPN IP Business") || (serviceType=="ASTINET" && packageName=="ASTINet Beda Bandwidth")){
+                if ((serviceType == "VPN" && serviceTypePackage == "VPN IP Business") || (serviceType == "ASTINET" && packageName == "ASTINet Beda Bandwidth")) {
 
                     LogUtil.info(this.getClass().getName(), "\nSending 'POST' request to URL 2: " + url);
 
@@ -307,26 +319,26 @@ public class GenerateVLANReservationDao {
 
                     JSONArray deviceAndPorts2 = new JSONArray();
 
-                    try(OutputStream os = con2.getOutputStream()) {
-                        byte[] input = createRequestReservationWithVCID(deviceAndPorts2, reservationId, serviceType,sto).getBytes("utf-8");
+                    try (OutputStream os = con2.getOutputStream()) {
+                        byte[] input = createRequestReservationWithVCID(deviceAndPorts2, reservationId, serviceType, sto).getBytes("utf-8");
                         os.write(input, 0, input.length);
                     }
                     int responseCode2 = con.getResponseCode();
-                    LogUtil.info(this.getClass().getName(), "\nresponseCode status : "+responseCode2);
+                    LogUtil.info(this.getClass().getName(), "\nresponseCode status : " + responseCode2);
                     if (responseCode2 == 400) {
                         LogUtil.info(this.getClass().getName(), "STO not found");
                         msg = "UnReserve Second VLAN Failed";
                     } else if (responseCode2 == 200) {
-                        if (serviceType=="VPN" && serviceTypePackage=="VPN IP Business"){
+                        if (serviceType == "VPN" && serviceTypePackage == "VPN IP Business") {
                             setSecondVLANVPNAttribute(wonum);
-                        }else if(serviceType=="ASTINET" && packageName=="ASTINET Beda Bandwidth"){
+                        } else if (serviceType == "ASTINET" && packageName == "ASTINET Beda Bandwidth") {
                             setSecondVLANAstinetAttribute(wonum);
                         }
-                        msg=msg+("Generate Second VLAN Success.\n"+"Refresh/Reopen the order to view the VLAN Detail.\n"+resultVlanReservation);
+                        msg = msg + ("Generate Second VLAN Success.\n" + "Refresh/Reopen the order to view the VLAN Detail.\n" + resultVlanReservation);
                     }
                 }
-            }else{
-                String url = "https://api-emas.telkom.co.id:8443/api/vlan/reservation?reservationId="+reservationId;
+            } else {
+                String url = "https://api-emas.telkom.co.id:8443/api/vlan/reservation?reservationId=" + reservationId;
 
                 LogUtil.info(this.getClass().getName(), "\nSending 'Delete' request to URL : " + url);
 
@@ -340,25 +352,25 @@ public class GenerateVLANReservationDao {
 
                 JSONArray deviceAndPorts = new JSONArray();
 
-                try(OutputStream os = con.getOutputStream()) {
-                    byte[] input = createRequestReservationWithVCID(deviceAndPorts, reservationId, serviceType,sto).getBytes("utf-8");
+                try (OutputStream os = con.getOutputStream()) {
+                    byte[] input = createRequestReservationWithVCID(deviceAndPorts, reservationId, serviceType, sto).getBytes("utf-8");
                     os.write(input, 0, input.length);
                 }
                 int responseCode = con.getResponseCode();
-                LogUtil.info(this.getClass().getName(), "\nresponseCode status : "+responseCode);
+                LogUtil.info(this.getClass().getName(), "\nresponseCode status : " + responseCode);
 
                 if (responseCode == 400) {
                     LogUtil.info(this.getClass().getName(), "STO not found");
                     msg = "UnReserve VLAN Failed";
                 } else if (responseCode == 200) {
                     unsetVLANAttribute(wonum, connection);
-                    msg="UnReserve VLAN Success. Refresh/Reopen order to view the VLAN detail.";
+                    msg = "UnReserve VLAN Success. Refresh/Reopen order to view the VLAN detail.";
                 }
             }
 
         } catch (Exception e) {
             msg = e.getMessage();
-            msg = "Generate VLAN Failed. General Failure.\\n"+msg;
+            msg = "Generate VLAN Failed. General Failure.\\n" + msg;
             LogUtil.info(this.getClass().getName(), "Trace error here :" + e.getMessage());
         }
         return msg;

@@ -1,5 +1,9 @@
 package id.co.telkom.wfm.plugin.dao;
 
+import id.co.telkom.wfm.plugin.kafka.ResponseKafka;
+import id.co.telkom.wfm.plugin.model.APIConfig;
+import id.co.telkom.wfm.plugin.util.ConnUtil;
+import id.co.telkom.wfm.plugin.util.FormatLogIntegrationHistory;
 import id.co.telkom.wfm.plugin.util.TimeUtil;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.commons.util.LogUtil;
@@ -20,6 +24,12 @@ import java.sql.*;
 import java.util.Date;
 
 public class GenerateVRFDao {
+    
+    FormatLogIntegrationHistory insertIntegrationHistory = new FormatLogIntegrationHistory();
+    ResponseKafka responseKafka = new ResponseKafka();
+    ConnUtil connUtil = new ConnUtil();
+    APIConfig apiConfig = new APIConfig();
+
     public JSONObject getAssetattrid(String wonum) throws SQLException, JSONException {
         JSONObject resultObj = new JSONObject();
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
@@ -139,7 +149,8 @@ public class GenerateVRFDao {
             if(rd!=null){
                 msg = "RD is already generated. Refresh/Reopen order to view the RD, RT Import, RT Export detail.";
             }else{
-                String url = "https://api-emas.telkom.co.id:8443/api/vrf/generate";
+                apiConfig = connUtil.getApiParam("uimax_dev");
+                String url = apiConfig.getUrl()+"api/vrf/generate";
                 LogUtil.info(this.getClass().getName(), "\nSending 'POST' request to URL : " + url);
 
                 URL obj = new URL(url);
@@ -201,7 +212,7 @@ public class GenerateVRFDao {
                     String reservedRD=fixObj.get("reservedRD").toString();
                     String jsonIsNew=fixObj.get("isNew").toString();
                     if (jsonIsNew=="true" || jsonIsNew=="false"){
-                        String urlAssociateVRF = "https://api-emas.telkom.co.id:8443/api/vrf/associateToDevice";
+                        String urlAssociateVRF = apiConfig.getUrl()+"api/vrf/associateToDevice";
                         LogUtil.info(this.getClass().getName(), "\nSending 'POST' request to URL : " + url);
 
                         URL objAssociateVRF = new URL(urlAssociateVRF);

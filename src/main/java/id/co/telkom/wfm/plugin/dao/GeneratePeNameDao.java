@@ -7,7 +7,11 @@ package id.co.telkom.wfm.plugin.dao;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import id.co.telkom.wfm.plugin.kafka.ResponseKafka;
+import id.co.telkom.wfm.plugin.model.APIConfig;
 import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
+import id.co.telkom.wfm.plugin.util.ConnUtil;
+import id.co.telkom.wfm.plugin.util.FormatLogIntegrationHistory;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
@@ -18,6 +22,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import javax.sql.DataSource;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.commons.util.LogUtil;
 import org.joget.commons.util.UuidGenerator;
@@ -29,6 +36,11 @@ import org.json.JSONObject;
  * @author ASUS
  */
 public class GeneratePeNameDao {
+
+    FormatLogIntegrationHistory insertIntegrationHistory = new FormatLogIntegrationHistory();
+    ResponseKafka responseKafka = new ResponseKafka();
+    ConnUtil connUtil = new ConnUtil();
+    APIConfig apiConfig = new APIConfig();
 
     public JSONObject getAssetattridType(String wonum) throws SQLException, JSONException {
         JSONObject resultObj = new JSONObject();
@@ -66,17 +78,25 @@ public class GeneratePeNameDao {
         return result;
     }
 
-    private boolean deletetkDeviceattribute(String wonum, Connection con) throws SQLException {
-        boolean status = false;
-        String queryDelete = "DELETE FROM app_fd_tk_deviceattribute WHERE c_ref_num = ?";
-        PreparedStatement ps = con.prepareStatement(queryDelete);
-        ps.setString(1, wonum);
-        int count = ps.executeUpdate();
-        if (count > 0) {
-            status = true;
+    public void deleteTkDeviceattribute(String wonum) throws SQLException {
+        DataSource dataSource = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
+        String deleteQuery = "DELETE FROM APP_FD_TK_DEVICEATTRIBUTE WHERE C_REF_NUM = ?";
+
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement preparedStatement = connection.prepareStatement(deleteQuery)) {
+
+            preparedStatement.setString(1, wonum);
+            int rowsAffected = preparedStatement.executeUpdate();
+
+            if (rowsAffected > 0) {
+                LogUtil.info(getClass().getName(), "Berhasil menghapus data");
+            } else {
+                LogUtil.info(getClass().getName(), "Gagal menghapus data");
+            }
+
+        } catch (SQLException e) {
+            LogUtil.error(getClass().getName(), e, "Trace error here: " + e.getMessage());
         }
-        LogUtil.info(getClass().getName(), "Status Delete : " + status);
-        return status;
     }
 
     private boolean updateCommunityTransit(String wonum, String community) throws SQLException {
@@ -140,7 +160,7 @@ public class GeneratePeNameDao {
         // Generate UUID
         String uuId = UuidGenerator.getInstance().getUuid();
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String insert = "INSERT INTO APP_FD_TK_DEVICEATTRIBUTE (ID, C_REF_NUM, C_ATTR_NAME, C_ATTR_TYPE, C_DESCRIPTION) VALUES (?, ?, ?, ?, ?)";
+        String insert = "INSERT INTO APP_FD_TK_DEVICEATTRIBUTE (ID, C_REF_NUM, C_ATTR_NAME, C_ATTR_TYPE, C_DESCRIPTION, DATECREATED) VALUES (?, ?, ?, ?, ?, SYSDATE)";
 
         try (Connection con = ds.getConnection();
                 PreparedStatement ps = con.prepareStatement(insert)) {
@@ -162,37 +182,9 @@ public class GeneratePeNameDao {
         }
     }
 
-    private boolean updateAttributeValue(String wonum, String peIpaddress, String peModel) throws SQLException {
-        boolean result = false;
-        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String update = "UPDATE APP_FD_WORKORDERSPEC\n"
-                + "SET c_value =\n"
-                + "  CASE c_assetattrid\n"
-                + "    WHEN 'PE_IPADDRESS' THEN ?\n"
-                + "    WHEN 'PE_MODEL' THEN ?\n"
-                + "  END\n"
-                + "WHERE c_wonum = ?\n"
-                + "AND c_assetattrid IN ('PE_MODEL', 'PE_IPADDRESS')";
-        try (Connection con = ds.getConnection();
-                PreparedStatement ps = con.prepareStatement(update)) {
-            ps.setString(1, peIpaddress);
-            ps.setString(2, peModel);
-            ps.setString(3, wonum);
-            LogUtil.info(getClass().getName(), "QUERY UPDATE : " + update);
-            int exe = ps.executeUpdate();
-
-            if (exe > 0) {
-                result = true;
-                LogUtil.info(getClass().getName(), "ReadOnly updated to " + wonum);
-            }
-        } catch (SQLException e) {
-            LogUtil.error(getClass().getName(), e, "Trace error here: " + e.getMessage());
-        }
-        return result;
-    }
-
-    public JSONObject callGeneratePeName(String wonum, ListGenerateAttributes listGenerate) throws MalformedURLException, Throwable {
-        JSONObject msg = new JSONObject();
+    public String callGeneratePeName(String wonum, ListGenerateAttributes listGenerate) throws MalformedURLException, Throwable {
+//        JSONObject msg = new JSONObject();
+        String message = "";
         try {
             JSONObject assetAttributes = getAssetattridType(wonum);
             String deviceType = assetAttributes.optString("DEVICETYPE", "null");
@@ -200,78 +192,119 @@ public class GeneratePeNameDao {
             String areaType = assetAttributes.optString("AREATYPE", "null");
             String serviceType = assetAttributes.optString("SERVICE_TYPE", "null");
 
-            String url = "https://api-emas.telkom.co.id:8443/api/device/byServiceArea?" + "deviceType=" + deviceType + "&areaName=" + areaName + "&areaType=" + areaType + "&serviceType=" + serviceType;
+            LogUtil.info(getClass().getName(), "DEVICETYPE : " + deviceType);
+            LogUtil.info(getClass().getName(), "AREANAME : " + areaName);
+            LogUtil.info(getClass().getName(), "AREATYPE : " + areaType);
+            LogUtil.info(getClass().getName(), "SERVICE_TYPE : " + serviceType);
 
-            URL getUrlServiveByArea = new URL(url);
-            HttpURLConnection con = (HttpURLConnection) getUrlServiveByArea.openConnection();
+            apiConfig = connUtil.getApiParam("uimax_dev");
+            String url = apiConfig.getUrl() + "api/device/byServiceArea?" + "deviceType=" + deviceType + "&areaName=" + areaName + "&areaType=" + areaType + "&serviceType=" + serviceType;
 
-            con.setRequestMethod("GET");
-            con.setRequestProperty("Accept", "application/json");
-            int responseCode = con.getResponseCode();
+            OkHttpClient client = new OkHttpClient();
+            Request request = new Request.Builder()
+                    .url(url)
+                    .build();
+
+            Response response = client.newCall(request).execute();
+
+            // Dapatkan kode status dan isi respons
+            int responseCode = response.code();
+            String responseBody = response.body().string();
+
+            System.out.println("Status Code: " + responseCode);
+            System.out.println("Response Body:\n" + responseBody);
             LogUtil.info(this.getClass().getName(), "\nSending 'GET' request to URL : " + url);
             LogUtil.info(this.getClass().getName(), "Response Code : " + responseCode);
+            LogUtil.info(this.getClass().getName(), "Response : " + responseBody);
 
+//            URL getUrlServiveByArea = new URL(url);
+//            HttpURLConnection con = (HttpURLConnection) getUrlServiveByArea.openConnection();
+//
+//            con.setRequestMethod("GET");
+//            con.setRequestProperty("Accept-Language", "en-US,en;q=0.5");
+//            con.setRequestProperty("Content-Type", "application/json");
+//            con.setDoOutput(true);
+//
+//            int responseCode = con.getResponseCode();
+            listGenerate.setStatusCode(responseCode);
+//            LogUtil.info(this.getClass().getName(), "\nSending 'GET' request to URL : " + url);
+//            LogUtil.info(this.getClass().getName(), "Response Code : " + responseCode);
+//            // GET Actcode
+            JSONObject detailactcode = getDetailactcode(wonum);
+            String actCode = detailactcode.optString("detailactcode");
             if (responseCode == 404) {
-                LogUtil.info(this.getClass().getName(), "PE Name not found!");
-                listGenerate.setStatusCode(responseCode);
-            } else if (responseCode == 200) {
-                listGenerate.setStatusCode(responseCode);
-
-                DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-                Connection connection = ds.getConnection();
-
-                BufferedReader in = new BufferedReader(
-                        new InputStreamReader(con.getInputStream()));
-                String inputLine;
-                StringBuffer response = new StringBuffer();
-                while ((inputLine = in.readLine()) != null) {
-                    response.append(inputLine);
+                if (actCode.equals("Populate SBC")) {
+                    message = "SBC Not Found";
+                    LogUtil.info(this.getClass().getName(), "PE Name not found!");
+                    JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "PENAME", apiConfig.getUrl(), "Success", url, "PE Name Not Found!");
+                    String kafkaRes = formatResponse.toString();
+                    responseKafka.IntegrationHistory(kafkaRes);
+                    LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
+                } else {
+                    message = "PE Not Found";
+                    JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "PENAME", apiConfig.getUrl(), "Success", url, "PE Name Not Found!");
+                    String kafkaRes = formatResponse.toString();
+                    responseKafka.IntegrationHistory(kafkaRes);
+                    LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
                 }
-                LogUtil.info(this.getClass().getName(), "PE Name : " + response);
-                in.close();
+//              
+            } else if (responseCode == 200) {
+//                BufferedReader in = new BufferedReader(
+//                        new InputStreamReader(con.getInputStream()));
+//                String inputLine;
+//                StringBuffer response = new StringBuffer();
+//                while ((inputLine = in.readLine()) != null) {
+//                    response.append(inputLine);
+//                }
+//                LogUtil.info(this.getClass().getName(), "PE Name : " + response);
+//                in.close();
 
                 // At this point, 'response' contains the JSON data as a string
-                String jsonData = response.toString();
+//                String jsonData = response.toString();
 
-                // Now, parse the JSON data using jackson
+//                 Now, parse the JSON data using jackson
                 ObjectMapper objectMapper = new ObjectMapper();
-                JsonNode portArrayNode = objectMapper.readTree(jsonData);
+                JsonNode jsonArray = objectMapper.readTree(responseBody);
 
-                String community = portArrayNode.get(0).get("community").asText();
-                String name = portArrayNode.get(0).get("name").asText();
-                String manufactur = portArrayNode.get(0).get("manufacturer").asText();
-                String ipAddress = portArrayNode.get(0).get("ipAddress").asText();
-                String model = portArrayNode.get(0).get("model").asText();
+                String community = jsonArray.get(0).get("community").asText();
 
-                msg.put("COMMUNITY_TRANSIT", community);
-                msg.put("PE_NAME", name);
-                msg.put("PE_MANUFACTUR", manufactur);
-                msg.put("PE_IPADDRESS", ipAddress);
-                msg.put("PE_MODEL", model);
-
-                LogUtil.info(this.getClass().getName(), "COMMUNITY_TRANSIT : " + community);
-                LogUtil.info(this.getClass().getName(), "PE_NAME : " + name);
-                LogUtil.info(this.getClass().getName(), "PE_MANUFACTUR : " + manufactur);
-                LogUtil.info(this.getClass().getName(), "PE_IPADDRESS : " + ipAddress);
-                LogUtil.info(this.getClass().getName(), "PE_MODEL : " + model);
-
-                // Checking if detailactcode == Populate PE Port IP Transit -> update value COMMUNITY_TRANSIT
-                if (getDetailactcode(wonum).get("detailactcode").toString().equals("Populate PE Port IP Transit")) {
+                if (actCode.equals("Populate PE Port IP Transit")) {
                     updateCommunityTransit(wonum, community);
                     LogUtil.info(this.getClass().getName(), "UPDATE COMMUNITY SUCCESSFULLY ");
                 }
-                // Clear Data
-                deletetkDeviceattribute(wonum, connection);
-                // update value PE_IPADDRESS & PE_MODEL
-                updateAttributeValue(wonum, ipAddress, model);
-                // insert response data to table APP_FD_TK_DEVICEATTRIBUTE
-                insertToDeviceTable(wonum, "PE_NAME", "", name);
-                insertToDeviceTable(wonum, "PE_MANUFACTUR", name, manufactur);
-            }
 
+                deleteTkDeviceattribute(wonum);
+
+                for (JsonNode jsonNode : jsonArray) {
+                    String ipAddress = jsonNode.get("ipAddress").asText();
+                    String manufacturer = jsonNode.get("manufacturer").asText();
+                    String model = jsonNode.get("model").asText();
+                    String name = jsonNode.get("name").asText();
+                    if (actCode.equals("Populate SBC")) {
+                        insertToDeviceTable(wonum, "SBC_NAME", "", name);
+                        insertToDeviceTable(wonum, "SBC_MANUFACTUR", name, manufacturer);
+                        insertToDeviceTable(wonum, "SBC_IPADDRESS", name, ipAddress);
+
+                        message = message + "SBC_NAME : " + name + "<br>"
+                                + "SBC_MANUFACTUR : " + manufacturer + "<br>"
+                                + "SBC_IPADDRESS : " + ipAddress + "<br>";
+                    } else {
+                        insertToDeviceTable(wonum, "PE_NAME", "", name);
+                        insertToDeviceTable(wonum, "PE_MANUFACTUR", name, manufacturer);
+                        insertToDeviceTable(wonum, "PE_IPADDRESS", name, ipAddress);
+                        insertToDeviceTable(wonum, "PE_MODEL", name, model);
+
+                        message = message + "PE_NAME : " + name + "<br>"
+                                + "PE_MANUFACTUR : " + manufacturer + "<br>"
+                                + "PE_IPADDRESS : " + ipAddress + "<br>"
+                                + "PE_MODEL : " + model + "<br>"
+                                + "COMMUNITY_TRANSIT : " + community + "";
+                    }
+                }
+            }
         } catch (Exception e) {
             LogUtil.info(this.getClass().getName(), "Trace error here :" + e.getMessage());
         }
-        return msg;
+        return message;
     }
 }
