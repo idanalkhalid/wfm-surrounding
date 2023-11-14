@@ -5,10 +5,8 @@
  */
 package id.co.telkom.wfm.plugin;
 
-import id.co.telkom.wfm.plugin.dao.GenerateMeAccessDao;
 import id.co.telkom.wfm.plugin.dao.GeneratePeNameDao;
 import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
-import id.co.telkom.wfm.plugin.util.ResponseAPI;
 import java.io.IOException;
 import java.util.Map;
 import java.util.logging.Level;
@@ -68,30 +66,29 @@ public class GeneratePeName extends Element implements PluginWebSupport {
     @Override
     public void webService(HttpServletRequest hsr, HttpServletResponse hsr1) throws ServletException, IOException {
         //@@Start..
-        LogUtil.info(getClass().getName(), "Start Process: Generate ME Service");
-        ListGenerateAttributes listAttribute = new ListGenerateAttributes();
-        GeneratePeNameDao dao = new GeneratePeNameDao();
-        JSONObject res = new JSONObject();
-        
+        LogUtil.info(getClass().getName(), "Start Process: Generate PE Name");
+
         //@Authorization
-        if ("GET".equals(hsr.getMethod())) {
+        if ("POST".equals(hsr.getMethod())) {
             try {
+                GeneratePeNameDao dao = new GeneratePeNameDao();
+                JSONObject res = new JSONObject();
                 LogUtil.info(getClassName(), "Call Generate PE Name");
 
                 if (hsr.getParameterMap().containsKey("wonum")) {
+                    ListGenerateAttributes listAttribute = new ListGenerateAttributes();
+                    
                     String wonum = hsr.getParameter("wonum");
-                    org.json.JSONObject generatePeName = dao.callGeneratePeName(wonum, listAttribute);
-
+                    String generatePeName = dao.callGeneratePeName(wonum, listAttribute);
+                    LogUtil.info(getClassName(), "Status Code: " + listAttribute.getStatusCode());
                     if (listAttribute.getStatusCode() == 404) {
                         res.put("code", 422);
-                        res.put("message", "No PE Name found!");
-                        res.put("data", generatePeName);
+                        res.put("message", generatePeName);
                         res.writeJSONString(hsr1.getWriter());
                         LogUtil.info(getClassName(), "Status Code: " + listAttribute.getStatusCode());
                     } else if (listAttribute.getStatusCode() == 200) {
                         res.put("code", 200);
-                        res.put("message", "PE Name Found");
-                        res.put("data", generatePeName);
+                        res.put("message", generatePeName);
                         res.writeJSONString(hsr1.getWriter());
                     } else {
                         LogUtil.info(getClass().getName(), "Call Failed");
@@ -105,7 +102,7 @@ public class GeneratePeName extends Element implements PluginWebSupport {
             } catch (Throwable ex) {
                 Logger.getLogger(GeneratePeName.class.getName()).log(Level.SEVERE, null, ex);
             }
-        } else if (!"GET".equals(hsr.getMethod())) {
+        } else if (!"POST".equals(hsr.getMethod())) {
             try {
                 hsr1.sendError(405, "Method Not Allowed");
             } catch (Exception e) {

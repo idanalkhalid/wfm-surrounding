@@ -211,7 +211,7 @@ public class GenerateStpNetLocDao {
             int exe = ps.executeUpdate();
 
             if (exe > 0) {
-                LogUtil.info(this.getClass().getName(), "Berhasil menambahkan data");
+                LogUtil.info(this.getClass().getName(), "Berhasil menambahkan data " + attrName);
             }
         } catch (SQLException e) {
             LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());

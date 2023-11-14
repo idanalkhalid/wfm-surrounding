@@ -27,7 +27,6 @@ public class GenerateMeAccessDao {
 
     FormatLogIntegrationHistory insertIntegrationHistory = new FormatLogIntegrationHistory();
     ResponseKafka responseKafka = new ResponseKafka();
-    // Get URL
     ConnUtil connUtil = new ConnUtil();
     APIConfig apiConfig = new APIConfig();
 
@@ -169,9 +168,9 @@ public class GenerateMeAccessDao {
         return result;
     }
 
-    public JSONObject callGenerateMeAccess(String wonum, ListGenerateAttributes listGenerate) throws SQLException, JSONException {
-        JSONObject msg = new JSONObject();
-
+    public String callGenerateMeAccess(String wonum, ListGenerateAttributes listGenerate) throws SQLException, JSONException {
+//        JSONObject msg = new JSONObject();
+        String message = "";
         JSONObject assetAttributes = getAssetattridType(wonum);
         ConnUtil util = new ConnUtil();
 
@@ -196,17 +195,20 @@ public class GenerateMeAccessDao {
         }
 
         try {
-            APIConfig api = util.getApiParam("uimax_dev");
-            String URL = api.getUrl();
-            String url = URL + "api/device/linkedPort?" + "deviceName=" + deviceName + "&portName=" + portname + "&deviceLink=" + deviceLink;
-            String urlByIp = URL + "api/device/find?" + "ipAddress=" + meIpAddress;
+
+            apiConfig = connUtil.getApiParam("uimax_dev");
+
+            String url = apiConfig.getUrl() + "api/device/linkedPort?" + "deviceName=" + deviceName + "&portName=" + portname + "&deviceLink=" + deviceLink;
+            String urlByIp = apiConfig.getUrl() + "api/device/find?" + "ipAddress=" + meIpAddress;
+            LogUtil.info(getClass().getName(), "URL : " + apiConfig.getUrl());
+            LogUtil.info(getClass().getName(), "REQUEST : " + url);
 
             URL getDeviceLinkPort = new URL(url);
             URL getDeviceLinkPortByIp = new URL(urlByIp);
 
             String nteType = assetAttributes.optString("NTE_TYPE", null);
             LogUtil.info(getClass().getName(), "NTE_TYPE : " + nteType);
-            if (!nteType.isEmpty()) {
+            if (!nteType.equals("None")) {
                 if (nteType.equals("DirectME") || nteType.equals("L2Switch")) {
                     HttpURLConnection con = (HttpURLConnection) getDeviceLinkPortByIp.openConnection();
 
@@ -219,7 +221,8 @@ public class GenerateMeAccessDao {
                     if (responseCode == 404) {
                         LogUtil.info(this.getClass().getName(), "ME Service Not found!");
                         listGenerate.setStatusCode(responseCode);
-                        msg.put("Device", "None");
+//                        msg.put("Device", "None");
+                        message = "Device None";
                         JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "MEACCESS", apiConfig.getUrl(), "Success", urlByIp, "ME Service Not Found!");
                         String kafkaRes = formatResponse.toString();
                         responseKafka.IntegrationHistory(kafkaRes);
@@ -251,9 +254,9 @@ public class GenerateMeAccessDao {
                         LogUtil.info(this.getClass().getName(), "ME NAME :" + name);
                         LogUtil.info(this.getClass().getName(), "ME IPADDRESS :" + ipAddress);
 
-                        msg.put("MEManufactur", manufactur);
-                        msg.put("MEName", name);
-                        msg.put("MEIPAddress", ipAddress);
+                        message = "ME_MANUFACTUR : " + manufactur + " <br>"
+                                + "ME_NAME : " + name + "<br>"
+                                + "ME_IPADDRESS : " + ipAddress + "";
                         // Update Data ME ACCESS BY IPADDRESS
                         updateDeviceLinkPortByIp(wonum, manufactur, name, ipAddress);
                         updateReadOnly(wonum, 0);
@@ -317,12 +320,12 @@ public class GenerateMeAccessDao {
                         LogUtil.info(this.getClass().getName(), "ME_PORTID : " + key);
                         LogUtil.info(this.getClass().getName(), "ME_PORTNAME : " + portName);
 
-                        msg.put("MEManufactur", manufactur);
-                        msg.put("MEName", name);
-                        msg.put("MEIPAddress", ipAddress);
-                        msg.put("MEPortMTU", mtu);
-                        msg.put("MEPortId", key);
-                        msg.put("MEPortName", portName);
+                        message = "ME_MANUFACTUR : " + manufactur + " <br>"
+                                + "ME_NAME : " + name + "<br>"
+                                + "ME_IPADDRESS : " + ipAddress + "<br>"
+                                + "ME_PORT_MTU : " + mtu + "<br>"
+                                + "ME_PORTID : " + key + "<br>"
+                                + "ME_PORTNAME : " + portName + "";
 
                         // Update STO, REGION, WITEL, DATEL from table WORKORDERSPEC
                         updateDeviceLinkPort(wonum, manufactur, name, ipAddress, mtu, key, portName);
@@ -337,11 +340,13 @@ public class GenerateMeAccessDao {
                         LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
                     }
                 }
+            } else {
+                LogUtil.info(getClass().getName(), "NTE TYPE IS EMPTY");
             }
 
         } catch (Exception e) {
             LogUtil.info(this.getClass().getName(), "Trace error here :" + e.getMessage());
         }
-        return msg;
+        return message;
     }
 }

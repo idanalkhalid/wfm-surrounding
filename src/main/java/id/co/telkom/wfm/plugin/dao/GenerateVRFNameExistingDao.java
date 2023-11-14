@@ -1,5 +1,9 @@
 package id.co.telkom.wfm.plugin.dao;
 
+import id.co.telkom.wfm.plugin.kafka.ResponseKafka;
+import id.co.telkom.wfm.plugin.model.APIConfig;
+import id.co.telkom.wfm.plugin.util.ConnUtil;
+import id.co.telkom.wfm.plugin.util.FormatLogIntegrationHistory;
 import id.co.telkom.wfm.plugin.util.TimeUtil;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.commons.util.LogUtil;
@@ -17,6 +21,11 @@ import java.sql.*;
 import java.util.Date;
 
 public class GenerateVRFNameExistingDao {
+
+    FormatLogIntegrationHistory insertIntegrationHistory = new FormatLogIntegrationHistory();
+    ResponseKafka responseKafka = new ResponseKafka();
+    ConnUtil connUtil = new ConnUtil();
+    APIConfig apiConfig = new APIConfig();
 
     TimeUtil time = new TimeUtil();
 
@@ -81,8 +90,8 @@ public class GenerateVRFNameExistingDao {
             String vrfName = findVRF(wonum);
             LogUtil.info(this.getClass().getName(), "\nVRF Name : " + wonum);
             LogUtil.info(this.getClass().getName(), "\nVRF Name : " + vrfName);
-
-            String url = "https://api-emas.telkom.co.id:8443/api/vrf/find?vrfName=" + vrfName;
+            apiConfig = connUtil.getApiParam("uimax_dev");
+            String url = apiConfig.getUrl() + "api/vrf/find?vrfName=*"+vrfName+"*";
             URL obj = new URL(url);
             HttpURLConnection con = (HttpURLConnection) obj.openConnection();
 

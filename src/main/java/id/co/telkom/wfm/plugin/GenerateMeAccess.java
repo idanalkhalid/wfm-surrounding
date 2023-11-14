@@ -79,20 +79,18 @@ public class GenerateMeAccess extends Element implements PluginWebSupport {
                     LogUtil.info(getClassName(), "Status Code : " + listAttribute.getStatusCode());
                     
                     String wonum = hsr.getParameter("wonum");
-                    org.json.JSONObject MeAccess = dao.callGenerateMeAccess(wonum, listAttribute);
+                    String MeAccess = dao.callGenerateMeAccess(wonum, listAttribute);
                     if (listAttribute.getStatusCode() == 404) {
 //                        String message = "No Service found!";
 //                        JSONObject res = responseTemplete.getResponse(message, 422);
                         res.put("code", 422);
-                        res.put("message", "No Service found!");
-                        res.put("data", MeAccess);
+                        res.put("message", "No Service found! <br> " + MeAccess);
                         res.writeJSONString(hsr1.getWriter());
                     } else if (listAttribute.getStatusCode() == 200) {
 //                        String message = "update data successfully";
 //                        JSONObject res = responseTemplete.getResponse(message, 200);
                         res.put("code", 200);
-                        res.put("message", "Service Found");
-                        res.put("data", MeAccess);
+                        res.put("message", "Service Found <br>" + MeAccess);
                         res.writeJSONString(hsr1.getWriter());
                     } else {
 //                        String message = "Call API is Failed";
