@@ -33,7 +33,7 @@ public class GenerateVRFDao {
     public JSONObject getAssetattrid(String wonum) throws SQLException, JSONException {
         JSONObject resultObj = new JSONObject();
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String query = "SELECT c_assetattrid, c_value FROM app_fd_workorderspec WHERE c_wonum = ? AND c_assetattrid IN ('VRF_NAME','CUSTOMER_NAME', 'TOPOLOGY', 'SERVICE_TYPE', 'PE_NAME', 'RD')";
+        String query = "SELECT c_assetattrid, c_value FROM app_fd_workorderspec WHERE c_wonum = ? AND c_assetattrid IN ('VRF_NAME','CUSTOMER_NAME', 'TOPOLOGY', 'SERVICE_TYPE', 'PE_NAME', 'RD', 'MAX_ROUTES')";
 
         try (Connection con = ds.getConnection();
              PreparedStatement ps = con.prepareStatement(query)) {
@@ -125,9 +125,7 @@ public class GenerateVRFDao {
             req.put("serviceType", "VPN");
             req.put("owner", owner);
             req.put("topology", "MESH");
-//            req.put("mesh", mesh);
             req.put("maxRoutes", 80);
-//            req.put("maxRoutes", maxRoutes);
             value = req.toString();
         } catch (JSONException e) {
             throw new RuntimeException(e);
@@ -135,17 +133,26 @@ public class GenerateVRFDao {
         LogUtil.info(this.getClass().getName(), "\nJSON Request: " + value);
         return value;
     }
-    public String callGenerateVRF(String wonum, String vrfName,String serviceType, String owner, String mesh, String maxRoutes) {
+    public String callGenerateVRF(String wonum) {
         String msg = "";
         try {
             JSONObject assetAttrId = getAssetattrid(wonum);
             LogUtil.info(this.getClass().getName(), "\nJSON Object: " + assetAttrId);
             String rd = assetAttrId.has("RD")? assetAttrId.get("RD").toString():null;
-            vrfName = assetAttrId.has("VRF_NAME")? assetAttrId.get("VRF_NAME").toString():null;
-//            owner = assetAttrId.has("CUSTOMER_NAME")? assetAttrId.get("CUSTOMER_NAME").toString():null;
-            String deviceName = assetAttrId.has("PE_NAME")? assetAttrId.get("PE_NAME").toString():null;
+            String vrfName = assetAttrId.has("VRF_NAME")? assetAttrId.get("VRF_NAME").toString():null;
+            String owner = assetAttrId.has("CUSTOMER_NAME")? assetAttrId.get("CUSTOMER_NAME").toString():null;
+            String maxRoutes = assetAttrId.has("MAX_ROUTES")? assetAttrId.get("MAX_ROUTES").toString():null;
             String topology = assetAttrId.has("TOPOLOGY")? assetAttrId.get("TOPOLOGY").toString():null;
-            serviceType = assetAttrId.has("SERVICE_TYPE")? assetAttrId.get("SERVICE_TYPE").toString():null;
+            String serviceType = assetAttrId.has("SERVICE_TYPE")? assetAttrId.get("SERVICE_TYPE").toString():null;
+            String deviceName = assetAttrId.has("PE_NAME")? assetAttrId.get("PE_NAME").toString():null;
+            LogUtil.info(this.getClass().getName(), "\nrequestCode rd : "+rd);
+            LogUtil.info(this.getClass().getName(), "\nrequestCode vrfName : "+vrfName);
+            LogUtil.info(this.getClass().getName(), "\nrequestCode maxRoutes : "+maxRoutes);
+            LogUtil.info(this.getClass().getName(), "\nrequestCode topology : "+topology);
+            LogUtil.info(this.getClass().getName(), "\nrequestCode serviceType : "+serviceType);
+            LogUtil.info(this.getClass().getName(), "\nrequestCode owner : "+owner);
+            LogUtil.info(this.getClass().getName(), "\nrequestCode deviceName : "+deviceName);
+
             if(rd!=null){
                 msg = "RD is already generated. Refresh/Reopen order to view the RD, RT Import, RT Export detail.";
             }else{
@@ -162,7 +169,7 @@ public class GenerateVRFDao {
                 con.setDoOutput(true);
 
                 try(OutputStream os = con.getOutputStream()) {
-                    byte[] input = createRequest(vrfName, owner, mesh, maxRoutes).getBytes("utf-8");
+                    byte[] input = createRequest(vrfName, "owner", topology, maxRoutes).getBytes("utf-8");
                     os.write(input, 0, input.length);
                 }
                 int responseCode = con.getResponseCode();
@@ -195,8 +202,8 @@ public class GenerateVRFDao {
                     }
                     JSONObject fixObj = jsonArray.getJSONObject(vrfObject);
                     maxRoutes = fixObj.get("maxRoutes").toString();
-                    LogUtil.info(this.getClass().getName(), "\nresponseCode status : "+maxRoutes);//80
-                    LogUtil.info(this.getClass().getName(), "\nresponseCode status : "+fixObj.get("rtExport").toString()); //["17974:1190287"]
+                    LogUtil.info(this.getClass().getName(), "\nmaxRoutes : "+maxRoutes);//80
+                    LogUtil.info(this.getClass().getName(), "\nrtExport "+fixObj.get("rtExport").toString()); //["17974:1190287"]
 
 //                    JSONArray jsonArrRTExport = new JSONArray(fixObj.get("rtExport").toString());
 //                    LogUtil.info(this.getClass().getName(), "\nresponseCode status : "+jsonArrRTExport.get(vrfObject)); //["17974:1190287"]
@@ -227,9 +234,10 @@ public class GenerateVRFDao {
                             byte[] inputAssociateVRF = createRequestAssociateVRF(vrfName,deviceName,reservedRD,rtExport,rtImport).getBytes("utf-8");
                             osAssociateVRF.write(inputAssociateVRF, 0, inputAssociateVRF.length);
                         }
+                        // sampai sini belum ada response lagi
                         int responseCodeAssociateVRF = connAssociateVRF.getResponseCode();
+                        LogUtil.info(this.getClass().getName(), "\nresponseCode status : "+responseCodeAssociateVRF);
                         if(responseCodeAssociateVRF == 200){
-                            LogUtil.info(this.getClass().getName(), "\nresponseCode status : "+responseCodeAssociateVRF);
                             StringBuilder responseAssociateVRF;
                             try(BufferedReader br = new BufferedReader(
                                     new InputStreamReader(connAssociateVRF.getInputStream(), "utf-8"))) {
