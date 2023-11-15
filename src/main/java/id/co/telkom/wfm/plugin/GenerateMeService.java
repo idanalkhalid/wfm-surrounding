@@ -70,30 +70,30 @@ public class GenerateMeService extends Element implements PluginWebSupport {
         ListGenerateAttributes listAttribute = new ListGenerateAttributes();
 
         //@Authorization
-        if ("GET".equals(hsr.getMethod())) {
+        if ("POST".equals(hsr.getMethod())) {
             try {
                 GenerateMeServiceDao dao = new GenerateMeServiceDao();
 
                 if (hsr.getParameterMap().containsKey("wonum")) {
                     String wonum = hsr.getParameter("wonum");
-                    org.json.JSONObject generateMeService = dao.callGenerateMeService(wonum, listAttribute);
+                    String generateMeService = dao.callGenerateMeService(wonum, listAttribute);
                     JSONObject res = new JSONObject();
                     if (listAttribute.getStatusCode() == 404) {
                         res.put("code", 422);
-                        res.put("message", "ME Service not Found");
-                        res.put("data", generateMeService);
+                        res.put("message", "ME Service not Found <br> "+ generateMeService +"" );
+//                        res.put("data", generateMeService);
                         res.writeJSONString(hsr1.getWriter());
                     } else {
                         res.put("code", 200);
-                        res.put("message", "Service Found");
-                        res.put("data", generateMeService);
+                        res.put("message", "Service Found <br> "+ generateMeService +"");
+//                        res.put("data", generateMeService);
                         res.writeJSONString(hsr1.getWriter());
                     }
                 }
             } catch (Exception e) {
                 LogUtil.error(getClassName(), e, "Trace Error Here : " + e.getMessage());
             }
-        } else if (!"GET".equals(hsr.getMethod())) {
+        } else if (!"POST".equals(hsr.getMethod())) {
             try {
                 hsr1.sendError(405, "Method Not Allowed");
             } catch (Exception e) {

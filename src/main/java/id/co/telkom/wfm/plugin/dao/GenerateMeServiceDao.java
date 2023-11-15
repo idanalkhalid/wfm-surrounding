@@ -7,9 +7,12 @@ package id.co.telkom.wfm.plugin.dao;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import id.co.telkom.wfm.plugin.kafka.ResponseKafka;
 import id.co.telkom.wfm.plugin.model.APIConfig;
 import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
 import id.co.telkom.wfm.plugin.util.ConnUtil;
+import id.co.telkom.wfm.plugin.util.FormatLogIntegrationHistory;
+import id.co.telkom.wfm.plugin.util.ValidateTaskAttribute;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
@@ -32,6 +35,12 @@ import org.json.JSONObject;
  */
 public class GenerateMeServiceDao {
 
+    FormatLogIntegrationHistory insertIntegrationHistory = new FormatLogIntegrationHistory();
+    ResponseKafka responseKafka = new ResponseKafka();
+    ConnUtil connUtil = new ConnUtil();
+    APIConfig apiConfig = new APIConfig();
+    ValidateTaskAttribute validateAttribute = new ValidateTaskAttribute();
+
     public JSONObject getAssetattridType(String wonum) throws SQLException, JSONException {
         JSONObject resultObj = new JSONObject();
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
@@ -49,154 +58,47 @@ public class GenerateMeServiceDao {
         return resultObj;
     }
 
-    public boolean updateDeviceLinkPortByIp(String wonum, String manufacture, String name, String ipAddress) throws SQLException {
-        boolean result = false;
+    public String getAssetattrid(String wonum) throws SQLException, JSONException {
+        String resultObj = "";
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        StringBuilder update = new StringBuilder();
-        update.append("UPDATE APP_FD_WORKORDERSPEC ")
-                .append("SET c_value = CASE c_assetattrid ")
-                .append("WHEN 'ME_SERVICE_MANUFACTURE' THEN ? ")
-                .append("WHEN 'ME_SERVICE_NAME' THEN ? ")
-                .append("WHEN 'ME_SERVICE_IPADDRESS' THEN ? ")
-                .append("ELSE 'Missing' END ")
-                .append("WHERE c_wonum = ? ")
-                .append("AND c_assetattrid IN ('ME_SERVICE_MANUFACTURE', 'ME_SERVICE_NAME', 'ME_SERVICE_IPADDRESS')");
-        try {
-            Connection con = ds.getConnection();
-            try {
-                PreparedStatement ps = con.prepareStatement(update.toString());
-                try {
-                    ps.setString(1, manufacture);
-                    ps.setString(2, name);
-                    ps.setString(3, ipAddress);
-                    ps.setString(4, wonum);
-
-                    int exe = ps.executeUpdate();
-                    if (exe > 0) {
-                        result = true;
-                        LogUtil.info(getClass().getName(), "ME Service updated to " + wonum);
-                    }
-                    if (ps != null) {
-                        ps.close();
-                    }
-                } catch (Throwable throwable) {
-                    try {
-                        if (ps != null) {
-                            ps.close();
-                        }
-                    } catch (Throwable throwable1) {
-                        throwable.addSuppressed(throwable1);
-                    }
-                    throw throwable;
-                }
-                if (con != null) {
-                    con.close();
-                }
-            } catch (Throwable throwable) {
-                try {
-                    if (con != null) {
-                        con.close();
-                    }
-                } catch (Throwable throwable1) {
-                    throwable.addSuppressed(throwable1);
-                }
-                throw throwable;
-            } finally {
-                ds.getConnection().close();
+        String query = "SELECT c_assetattrid FROM app_fd_workorderspec WHERE c_wonum = ? AND c_assetattrid = 'NTE_TYPE'";
+        try (Connection con = ds.getConnection();
+                PreparedStatement ps = con.prepareStatement(query)) {
+            ps.setString(1, wonum);
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                resultObj = rs.getString("c_assetattrid");
             }
         } catch (SQLException e) {
-            LogUtil.error(getClass().getName(), e, "Trace error here: " + e.getMessage());
+            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
         }
-        return result;
+        return resultObj;
     }
 
-    public boolean updateDeviceLinkPort(String wonum, String manufacture, String name, String ipAddress, String mtu, String key, String portName) throws SQLException {
-        boolean result = false;
-        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        StringBuilder update = new StringBuilder();
-        update.append("UPDATE APP_FD_WORKORDERSPEC ")
-                .append("SET c_value = CASE c_assetattrid ")
-                .append("WHEN 'ME_SERVICE_MANUFACTURE' THEN ? ")
-                .append("WHEN 'ME_SERVICE_NAME' THEN ? ")
-                .append("WHEN 'ME_SERVICE_IPADDRESS' THEN ? ")
-                .append("WHEN 'ME_SERVICE_PORT_MTU' THEN ? ")
-                .append("WHEN 'ME_SERVICE_KEY' THEN ? ")
-                .append("WHEN 'ME_SERVICE_PORTNAME' THEN ? ")
-                .append("END ")
-                .append("WHERE c_wonum = ? ")
-                .append("AND c_assetattrid IN ('ME_SERVICE_MANUFACTURE', 'ME_SERVICE_NAME', 'ME_SERVICE_IPADDRESS', 'ME_SERVICE_PORT_MTU', 'ME_SERVICE_KEY', 'ME_SERVICE_PORTNAME')");
-        try {
-            Connection con = ds.getConnection();
-            try {
-                PreparedStatement ps = con.prepareStatement(update.toString());
-                try {
-                    ps.setString(1, manufacture);
-                    ps.setString(2, name);
-                    ps.setString(3, ipAddress);
-                    ps.setString(4, mtu);
-                    ps.setString(5, key);
-                    ps.setString(6, portName);
-                    ps.setString(7, wonum);
-
-                    int exe = ps.executeUpdate();
-                    if (exe > 0) {
-                        result = true;
-                        LogUtil.info(getClass().getName(), "ME Service updated to " + wonum);
-                    }
-                    if (ps != null) {
-                        ps.close();
-                    }
-                } catch (Throwable throwable) {
-                    try {
-                        if (ps != null) {
-                            ps.close();
-                        }
-                    } catch (Throwable throwable1) {
-                        throwable.addSuppressed(throwable1);
-                    }
-                    throw throwable;
-                }
-                if (con != null) {
-                    con.close();
-                }
-            } catch (Throwable throwable) {
-                try {
-                    if (con != null) {
-                        con.close();
-                    }
-                } catch (Throwable throwable1) {
-                    throwable.addSuppressed(throwable1);
-                }
-                throw throwable;
-            } finally {
-                ds.getConnection().close();
-            }
-        } catch (SQLException e) {
-            LogUtil.error(getClass().getName(), e, "Trace error here: " + e.getMessage());
-        }
-        return result;
-    }
-
-    public JSONObject callGenerateMeService(String wonum, ListGenerateAttributes listGenerate) {
+    public String callGenerateMeService(String wonum, ListGenerateAttributes listGenerate) {
         JSONObject msg = new JSONObject();
-        ConnUtil util =  new ConnUtil();
-        
+        String message = "";
+
         try {
             JSONObject assetAttributes = getAssetattridType(wonum);
+
             String deviceName = assetAttributes.optString("PE_NAME", "null");
             String portname = assetAttributes.optString("PE_PORTNAME", "null").replace("/", "%2F");
             String ipaddress = assetAttributes.optString("ME_SERVICE_IPADDRESS", "null");
             String nteType = assetAttributes.optString("NTE_TYPE");
-            
-            APIConfig api = util.getApiParam("uimax_dev");
-            String URL = api.getUrl();
-            LogUtil.info(getClass().getName(), "URL : " + URL);
+            String attributeNTE = getAssetattrid(wonum);
+
+            apiConfig = connUtil.getApiParam("uimax_dev");
+            String URL = apiConfig.getUrl();
+
             String url = URL + "api/device/linkedPort?" + "deviceName=" + deviceName + "&portName=" + portname + "&deviceLink=" + "PE_METROE" + "&portStatus=ACTIVE";
             String urlByIp = URL + "api/device/find?" + "ipAddress=" + ipaddress;
             URL getDeviceLinkPort = new URL(url);
             URL getDeviceLinkPortByIp = new URL(urlByIp);
+            LogUtil.info(getClass().getName(), "URL : " + url);
+            LogUtil.info(getClass().getName(), "URL By  : " + urlByIp);
 
-            if (!nteType.isEmpty()) {
+            if (!attributeNTE.isEmpty()) {
                 if (nteType.equals("DirectME")) {
                     HttpURLConnection con = (HttpURLConnection) getDeviceLinkPortByIp.openConnection();
 
@@ -230,18 +132,21 @@ public class GenerateMeServiceDao {
                         String manufactur = portArrayNode.get(0).get("manufacturer").asText();
                         String name = portArrayNode.get(0).get("name").asText();
                         String ipAddress = portArrayNode.get(0).get("ipAddress").asText();
-                        
-                        msg.put("ME_MANUFACTUR", manufactur);
-                        msg.put("ME_NAME", name);
-                        msg.put("ME_IP", ipAddress);
-                        
+
+                        message = "ME_MANUFACTUR : " + manufactur + "<br>"
+                                + "ME_NAME : " + name + "<br>"
+                                + "ME_IP : " + ipAddress + "<br><br>";
+
                         LogUtil.info(this.getClass().getName(), "ME SERVICE MANUFACTUR :" + manufactur);
                         LogUtil.info(this.getClass().getName(), "ME SERVICE NAME :" + name);
                         LogUtil.info(this.getClass().getName(), "ME SERVICE IPADDRESS :" + ipAddress);
 
                         // Update Data ME SERVICE BY IPADDRESS
-                        updateDeviceLinkPortByIp(wonum, manufactur, name, ipAddress);
+//                        updateDeviceLinkPortByIp(wonum, manufactur, name, ipAddress);
                         LogUtil.info(this.getClass().getName(), "Update data successfully");
+                        validateAttribute.updateWO("app_fd_workorderspec", "c_value='" + manufactur + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='ME_SERVICE_MANUFACTUR'");
+                        validateAttribute.updateWO("app_fd_workorderspec", "c_value='" + name + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='ME_SERVICE_NAME'");
+                        validateAttribute.updateWO("app_fd_workorderspec", "c_value='" + ipAddress + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='ME_SERVICE_IPADDRESS'");
                     }
                 } else {
                     HttpURLConnection con = (HttpURLConnection) getDeviceLinkPort.openConnection();
@@ -281,25 +186,33 @@ public class GenerateMeServiceDao {
                         String mtu = jsonObject.getString("mtu");
                         String key = jsonObject.getString("key");
                         String portName = jsonObject.getString("name");
-                        
-                        msg.put("ME_MANUFACTUR", manufactur);
-                        msg.put("ME_NAME", name);
-                        msg.put("ME_IPADDRESS", ipAddress);
-                        msg.put("ME_PORTMTU", mtu);
-                        msg.put("ME_KEY", key);
-                        msg.put("ME_PORTNAME", portName);
 
-                        // Update STO, REGION, WITEL, DATEL from table WORKORDERSPEC
-                        updateDeviceLinkPort(wonum, manufactur, name, ipAddress, mtu, key, portName);
+                        message = "ME_MANUFACTUR : " + manufactur + "<br>"
+                                + "ME_NAME : " + name + "<br>"
+                                + "ME_IP : " + ipAddress + "<br>"
+                                + "ME_PORTMTU : " + mtu + "<br>"
+                                + "ME_KEY : " + key + "<br>"
+                                + "ME_PORTNAME : " + portName + "<br>";
+                        LogUtil.info(getClass().getName(), "Message : " + message);
+                        
+//                        updateDeviceLinkPort(wonum, manufactur, name, ipAddress, mtu, key, portName);
+                        validateAttribute.updateWO("app_fd_workorderspec", "c_value='" + manufactur + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='ME_SERVICE_MANUFACTUR'");
+                        validateAttribute.updateWO("app_fd_workorderspec", "c_value='" + name + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='ME_SERVICE_NAME'");
+                        validateAttribute.updateWO("app_fd_workorderspec", "c_value='" + ipAddress + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='ME_SERVICE_IPADDRESS'");
+                        validateAttribute.updateWO("app_fd_workorderspec", "c_value='" + mtu + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='ME_SERVICE_PORTMTU'");
+                        validateAttribute.updateWO("app_fd_workorderspec", "c_value='" + key + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='ME_SERVICE_KEY'");
+                        validateAttribute.updateWO("app_fd_workorderspec", "c_value='" + portName + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='ME_SERVICE_PORTNAME'");
                     }
                 }
             } else {
                 LogUtil.info(getClass().getName(), "NTE_TYPE tidak ada");
+                message = "NTE_TYPE is empty!";
+
             }
 
         } catch (Exception e) {
             LogUtil.info(this.getClass().getName(), "Trace error here :" + e.getMessage());
         }
-        return msg;
+        return message;
     }
 }
