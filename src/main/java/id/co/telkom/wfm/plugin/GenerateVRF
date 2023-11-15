@@ -1,0 +1,193 @@
+from java.util import Properties;
+from java.net import URL;
+from java.io import BufferedReader;
+from java.io import InputStreamReader;
+from java.io import OutputStream;
+from com.ibm.json.java import JSONObject;
+from com.ibm.json.java import JSONArray;
+from psdi.server import MXServer
+from java.lang import System;
+from psdi.security import UserInfo
+import javax.net.ssl.X509TrustManager;
+import javax.net.ssl.HostnameVerifier;
+import java.security.SecureRandom;
+
+
+maximo = MXServer.getMXServer() ;
+ui = maximo.getSystemUserInfo () ;
+
+def displayMsg(msgError):
+   global errorkey,errorgroup,params, e
+   errorgroup = "WORKORDER";
+   errorkey = "WFMINFO";
+   params = [msgError];
+
+propName="telkom.endpoint.uimax";
+propValue = maximo.getProperty(propName);
+
+stringUrl=str(propValue );
+
+def getUrl():
+    return stringUrl+"/api/vrf/generate";
+
+def getUrlAssociateVRF():
+    return stringUrl+"/api/vrf/associateToDevice";
+
+class MyTrustManager(javax.net.ssl.X509TrustManager):
+    def checkClientTrusted(self,chain,authtype):
+        pass;
+    def checkServerTrusted(self,chain,authtype):
+        pass;
+    def getAcceptedIssuers(self):
+        return None ;
+
+class MyHostnameVerifier(javax.net.ssl.HostnameVerifier):
+    def verify(self, hostname, session):
+        return True
+
+def setupSSLFactory():
+    tm = [MyTrustManager()];
+    sc = javax.net.ssl.SSLContext.getInstance("SSL");
+    rs=java.security.SecureRandom();
+    sc.init(None,tm,rs) ;
+    allHostsValid=MyHostnameVerifier();
+    javax.net.ssl.HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory()) ;
+    javax.net.ssl.HttpsURLConnection.setDefaultHostnameVerifier(allHostsValid) ;
+
+vrfName="";
+serviceType="VPN";
+owner="";
+topology="";
+maxRoutes="";
+deviceName="";
+rd="None";
+result="";
+configVRFPE="tidak perlu diconfig";
+
+wonum=mbo.getString("wonum");
+wospecSet=maximo.getMboSet("workorderspec",ui);
+wospecSet.setWhere("wonum='"+wonum+"' and assetattrid in ('VRF_NAME','CUSTOMER_NAME', 'TOPOLOGY', 'SERVICE_TYPE', 'PE_NAME', 'RD')");
+wospec=wospecSet.moveFirst();
+while (wospec!=None):
+   assetattrid=wospec.getString("assetattrid");
+   if(assetattrid=="VRF_NAME"):
+      vrfName=wospec.getString("alnvalue");
+   if(assetattrid=="CUSTOMER_NAME"):
+      owner=wospec.getString("alnvalue");
+   if(assetattrid=="TOPOLOGY"):
+      topology=wospec.getString("alnvalue");
+   if(assetattrid=="SERVICE_TYPE"):
+      serviceType=wospec.getString("alnvalue");
+   if(assetattrid=="PE_NAME"):
+      deviceName=wospec.getString("alnvalue");
+   if(assetattrid=="RD"):
+      rd=wospec.getString("alnvalue");
+   wospec=wospecSet.moveNext();
+wospecSet.close();
+
+rd="None";
+if (rd!="None"):
+  result="RD is already generated. Refresh/Reopen order to view the RD, RT Import, RT Export detail.";
+  displayMsg(result);
+else:
+  try:
+      setupSSLFactory();
+      urlConn=URL(getUrl());
+      conn = urlConn.openConnection();
+      conn.setRequestMethod("POST");
+      conn.setRequestProperty("Accept", "application/json");
+      conn.setRequestProperty("Content-Type", "application/json");
+      conn.setDoOutput(True);
+      messageData='{"vrfName": "'+vrfName+'",  "serviceType": "VPN",  "owner": "'+owner+'",  "topology": "MESH",  "maxRoutes": 80}';
+      os=conn.getOutputStream();
+      os.write(messageData);
+      os.flush();
+      if (conn.getResponseCode() != 200):
+          #print("Error");
+          er = BufferedReader(InputStreamReader((conn.getErrorStream())));
+          displayMsg("Generate VRF Failed\n"+str(er.readLine()));
+          #displayMsg("CURL: "+str(getUrl())+"\nmessageData: "+str(messageData));
+      elif (conn.getResponseCode() == 200):
+          br = BufferedReader(InputStreamReader((conn.getInputStream())));
+          result=str(br.readLine());
+          jsonArr=JSONArray.parse(result);
+          vrfObject=0;
+          k=0;
+          while (k<jsonArr.size()):
+            jsonArrDeviceList=jsonArr[vrfObject].get("deviceList");
+            l=0;
+            while (l<jsonArrDeviceList.size()):
+              name=jsonArrDeviceList[l].get("name");
+              if (name==deviceName):
+                vrfObject=k;
+              l=l+1;
+            k=k+1;
+          maxRoutes=jsonArr[vrfObject].get("maxRoutes");
+          jsonArrRTExport=jsonArr[vrfObject].get("rtExport");
+          jsonRTExport=jsonArrRTExport[vrfObject];
+          jsonArrRTImport=jsonArr[vrfObject].get("rtImport");
+          i=0;
+          jsonRTImport="";
+          while (i<jsonArrRTImport.size()):
+            if i==0:
+              jsonRTImport=jsonArrRTImport[i];
+            else:
+              jsonRTImport=jsonRTImport+","+jsonArrRTImport[i];
+            i=i+1;
+          reservedRD=jsonArr[vrfObject].get("reservedRD");
+
+          jsonIsNew=jsonArr[vrfObject].get("isNew");
+
+          if (jsonIsNew==True or jsonIsNew==False):
+            setupSSLFactory();
+            urlConn=URL(getUrlAssociateVRF());
+            connAssociateVRF = urlConn.openConnection();
+            connAssociateVRF.setRequestMethod("POST");
+            connAssociateVRF.setRequestProperty("Accept", "application/json");
+            connAssociateVRF.setRequestProperty("Content-Type", "application/json");
+            connAssociateVRF.setDoOutput(True);
+            i=0;
+            jsonRTImportNew="";
+            while (i<jsonArrRTImport.size()):
+              if i==0:
+                jsonRTImportNew=jsonArrRTImport[i];
+              else:
+                jsonRTImportNew=jsonRTImportNew+'","'+jsonArrRTImport[i];
+              i=i+1;
+            messageDataAssociateVRF='{  "vrfName": "'+vrfName+'", "deviceName": "'+deviceName+'", "rd": "'+reservedRD+'", "rtImport": ["'+jsonRTImportNew+'" ], "rtExport": [ "'+jsonRTExport+'"]}';
+            osAssociateVRF=connAssociateVRF.getOutputStream();
+            osAssociateVRF.write(messageDataAssociateVRF);
+            osAssociateVRF.flush();
+            if (connAssociateVRF.getResponseCode() != 200):
+              configVRFPE="tidak perlu diconfig"
+              er = BufferedReader(InputStreamReader((connAssociateVRF.getErrorStream())));
+              #displayMsg("Associate VRF Failed\n"+str(er.readLine()));
+              resultAssociateVRF=str(er.readLine());
+            elif (connAssociateVRF.getResponseCode() == 200):
+              brAssociateVRF = BufferedReader(InputStreamReader((connAssociateVRF.getInputStream())));
+              #resultAssociateVRF=str(brAssociateVRF.readLine());
+              resultAssociateVRF="Assicate VRF Success";
+              configVRFPE="tidak perlu diconfig"
+            connAssociateVRF.disconnect();
+          workspecSet=maximo.getMboSet("workorderspec",ui);
+          workspecSet.setWhere("wonum='"+wonum+"' and assetattrid in ('RT_EXPORT','RT_IMPORT','MAX_ROUTES', 'RD', 'CONFIG_VRF_PE')");
+          workspec=workspecSet.moveFirst();
+          while (workspec!=None):
+              assetattrid=workspec.getString("assetattrid");
+              if(assetattrid=="RT_EXPORT"):
+                workspec.setValue("alnvalue",str(jsonRTExport));
+              if(assetattrid=="RT_IMPORT"):
+                workspec.setValue("alnvalue",str(jsonRTImport));
+              if(assetattrid=="RD"):
+                workspec.setValue("alnvalue",str(reservedRD));
+              if(assetattrid=="MAX_ROUTES"):
+                workspec.setValue("alnvalue",str(maxRoutes));
+              if(assetattrid=="CONFIG_VRF_PE"):
+                workspec.setValue("alnvalue",str(configVRFPE));
+              workspec=workspecSet.moveNext();
+          workspecSet.save();
+          workspecSet.close();
+          displayMsg("Generate VRF Success.\nRD: "+reservedRD+"\nRT Export: "+jsonRTExport+"\nRT Import: "+jsonRTImport+"\nCONFIG_VRF_PE: "+configVRFPE+"\nRefresh/Reopen the order to view the RT Export/ RT Export Detail"+"\nResult Associate VRF: "+resultAssociateVRF);
+      conn.disconnect();
+  except Exception, e:
+      displayMsg("Generate VRF Failed2"+str(e));

@@ -2,6 +2,7 @@ package id.co.telkom.wfm.plugin.dao;
 
 import id.co.telkom.wfm.plugin.kafka.ResponseKafka;
 import id.co.telkom.wfm.plugin.model.APIConfig;
+import id.co.telkom.wfm.plugin.model.VrfReservation;
 import id.co.telkom.wfm.plugin.util.ConnUtil;
 import id.co.telkom.wfm.plugin.util.FormatLogIntegrationHistory;
 import id.co.telkom.wfm.plugin.util.TimeUtil;
@@ -28,7 +29,7 @@ public class GenerateVLANReservationDao {
     ResponseKafka responseKafka = new ResponseKafka();
     ConnUtil connUtil = new ConnUtil();
     APIConfig apiConfig = new APIConfig();
-
+    String resultVlanReservation = "";
     String peVlan = "";
     String peCVlan = "";
     String peSVlan = "";
@@ -47,134 +48,178 @@ public class GenerateVLANReservationDao {
     String devicePortMEService = "";
     String devicePortME = "";
     String devicePortAN = "";
-    String resultVlanReservation = "";
 
     public JSONObject getAssetattrid(String wonum) throws SQLException, JSONException {
         JSONObject resultObj = new JSONObject();
+        LogUtil.info(this.getClass().getName(), "\n assetAttr didalam: wonum "+wonum);
+
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
         String query = "SELECT c_assetattrid, c_value FROM app_fd_workorderspec WHERE c_wonum=? AND c_assetattrid IN ('AN_NAME','AN_UPLINK_PORTNAME', 'AREANAME', 'ME_NAME', 'ME_PORTNAME', 'ME_SERVICE_NAME', 'ME_SERVICE_PORTNAME','PE_NAME','PE_PORTNAME','RESERVATION_ID','SERVICE_TYPE','PE_VLAN','SERVICE_TYPE_VLAN','VLAN_RESERVATION_ID','ME_VLAN','AN_VLAN')";
 
         try (Connection con = ds.getConnection();
                 PreparedStatement ps = con.prepareStatement(query)) {
+            LogUtil.info(this.getClass().getName(), "\n assetAttr didalam try ");
+
             ps.setString(1, wonum);
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
-                String tempCValue = rs.getString("c_value").replace(" ", "%20");
+                String tempCValue = rs.getString("c_value");
+                if(tempCValue!= null){
+                    tempCValue.replace(" ", "%20");
+                }
                 resultObj.put(rs.getString("c_assetattrid"), tempCValue);
             }
+
+            LogUtil.info(this.getClass().getName(), "\n assetAttr didalam: "+resultObj);
         } catch (SQLException e) {
-            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
+            LogUtil.error(getClass().getName(), e, "Trace error here GetAssetattrid : " + e.getMessage());
+        }finally {
+            ds.getConnection().close();
         }
         return resultObj;
     }
 
-    public JSONObject parseDataVLAN(String responseMessage, String deviceNamePE, String deviceNameME, String deviceNameMEService, String deviceNameAN) {
-        JSONObject resultObj = new JSONObject();
+    public JSONArray generateMessageDataRequest(String deviceNamePE, String devicePortPE, String deviceNameME, String devicePortME, String deviceNameMEService, String devicePortMEService, String deviceNameAN, String devicePortAN) {
 
-        if (deviceNamePE == "") {
+        JSONArray resultArr = new JSONArray();
+        try{
+            LogUtil.info(this.getClass().getName(), "\n devicePortPE : " + devicePortPE);
+            LogUtil.info(this.getClass().getName(), "\n devicePortPE : " + devicePortPE);
+            if (deviceNamePE != null) {
+                JSONObject resultObj = new JSONObject();
+                resultObj.put("deviceName", deviceNamePE);
+                resultObj.put("portName", devicePortPE);
 
+                LogUtil.info(this.getClass().getName(), "\n resultObj : " + resultObj);
+
+                resultArr.put(resultObj);
+            }
+
+            LogUtil.info(this.getClass().getName(), "\n deviceNameME : " + deviceNameME);
+            LogUtil.info(this.getClass().getName(), "\n devicePortME : " + devicePortME);
+            if (deviceNameME != null) {
+                JSONObject resultObj = new JSONObject();
+                resultObj.put("deviceName", deviceNameME);
+                resultObj.put("portName", devicePortME);
+                resultArr.put(resultObj);
+
+                LogUtil.info(this.getClass().getName(), "\n resultObj : " + resultObj);
+
+            }
+
+            LogUtil.info(this.getClass().getName(), "\n deviceNameMEService : " + deviceNameMEService);
+            LogUtil.info(this.getClass().getName(), "\n devicePortMEService : " + devicePortMEService);
+            if (deviceNameMEService != null) {
+                JSONObject resultObj = new JSONObject();
+                resultObj.put("deviceName", deviceNameMEService);
+                resultObj.put("portName", devicePortMEService);
+                resultArr.put(resultObj);
+                LogUtil.info(this.getClass().getName(), "\n resultObj : " + resultObj);
+            }
+
+            LogUtil.info(this.getClass().getName(), "\n deviceNameAN : " + deviceNameAN);
+            LogUtil.info(this.getClass().getName(), "\n devicePortAN : " + devicePortAN);
+            if (deviceNameAN != null) {
+                JSONObject resultObj = new JSONObject();
+                resultObj.put("deviceName", deviceNameAN);
+                resultObj.put("portName", devicePortAN);
+                LogUtil.info(this.getClass().getName(), "\n resultObj : " + resultObj);
+                resultArr.put(resultObj);
+            }
+            LogUtil.info(this.getClass().getName(), "\n resultArr : " + resultArr);
+
+            return resultArr;
+        } catch (JSONException e) {
+            throw new RuntimeException(e);
         }
-
-        if (deviceNameME == "") {
-
-        }
-
-        if (deviceNameMEService == "") {
-
-        }
-
-        if (deviceNameAN == "") {
-
-        }
-
-        return resultObj;
     }
 
 //    public boolean updateVLANAttribute(String wonum,String peVlan, String peCVlan, String peSVlan, String meVlan,
 //            String meCVlan, String meSVlan, String meVCID, String meServiceVlan, String meServiceCVlan, String meServiceSVlan,
 //            String meServiceVCID, String anVlan, String anCVlan, String anSVlan, String devicePortPE, String devicePortMEService,
 //                                       String devicePortME, String devicePortAN,Connection con){
-    public boolean updateVLANAttribute(String wonum) {
+    public boolean updateVLANAttribute(String wonum, String assetAttrId,String value) throws SQLException {
         boolean status = false;
-        Date date = new Date();
-        Timestamp timestamp = new Timestamp(date.getTime());
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
 
-        StringBuilder queryUpdate = new StringBuilder();
-        queryUpdate.append("UPDATE APP_FD_WORKORDERSPEC")
-                .append("SET c_value = CASE c_assetattrid")
-                .append("WHEN 'PE_VLAN' THEN ?")
-                .append("WHEN 'PE_CVLAN' THEN ?")
-                .append("WHEN 'PE_SVLAN' THEN ?")
-                .append("WHEN 'ME_VLAN' THEN ?")
-                .append("WHEN 'ME_CVLAN' THEN ?")
-                .append("WHEN 'ME_SVLAN' THEN ?")
-                .append("WHEN 'ME_VCID' THEN ?")
-                .append("WHEN 'ME_SERVICE_VLAN' THEN ?")
-                .append("WHEN 'ME_SERVICE_CVLAN' THEN ?")
-                .append("WHEN 'ME_SERVICE_SVLAN' THEN ?")
-                .append("WHEN 'ME_SERVICE_VCID' THEN ?")
-                .append("WHEN 'AN_VLAN' THEN ?")
-                .append("WHEN 'AN_CVLAN' THEN ?")
-                .append("WHEN 'AN_SVLAN' THEN ?")
-                .append("WHEN 'PE_SUBINTERFACE' THEN ?")
-                .append("WHEN 'ME_SERVICE_SUBINTERFACE' THEN ?")
-                .append("WHEN 'ME_SUBINTERFACE' THEN ?")
-                .append("WHEN 'AN_SUBINTERFACE' THEN ?")
-                .append("ELSE 'ME_CVLAN' END")
-                .append("WHERE c_wonum = ?")
-                .append("AND c_assetattrid IN ('PE_VLAN','PE_CVLAN', 'PE_SVLAN','ME_VLAN','ME_CVLAN', 'ME_SVLAN', 'ME_VCID', 'ME_SERVICE_VLAN','ME_SERVICE_CVLAN', 'ME_SERVICE_SVLAN', 'ME_SERVICE_VCID','AN_VLAN','AN_CVLAN', 'AN_SVLAN', 'PE_SUBINTERFACE', 'ME_SERVICE_SUBINTERFACE' , 'ME_SUBINTERFACE', 'AN_SUBINTERFACE')");
-        try {
-            Connection con = ds.getConnection();
-            PreparedStatement ps = con.prepareStatement(queryUpdate.toString());
-
-            ps.setString(1, peVlan);
-            ps.setString(2, peCVlan);
-            ps.setString(3, peSVlan);
-            ps.setString(4, meVlan);
-            ps.setString(5, meCVlan);
-            ps.setString(6, meSVlan);
-            ps.setString(7, meVCID);
-            ps.setString(8, meServiceVlan);
-            ps.setString(9, meServiceCVlan);
-            ps.setString(10, meServiceSVlan);
-            ps.setString(11, meServiceVCID);
-            ps.setString(12, anVlan);
-            ps.setString(13, anCVlan);
-            ps.setString(14, anSVlan);
-            ps.setString(15, devicePortPE + "." + peVlan);
-            ps.setString(16, devicePortMEService + "." + meServiceVlan);
-            ps.setString(17, devicePortME + "." + meVlan);
-            ps.setString(18, devicePortAN + "." + anVlan);
-            ps.setString(19, wonum);
-
-            int count = ps.executeUpdate();
-            if (count > 0) {
-                status = true;
+        String query = "UPDATE app_fd_workorderspec SET c_value='" + value + "' WHERE c_wonum='"+wonum+"' AND c_assetattrid='" + assetAttrId+"'";
+        try (Connection con = ds.getConnection();
+             PreparedStatement ps = con.prepareStatement(query)) {
+            int exe = ps.executeUpdate();
+            if (exe > 0) {
+                status=true;
+                LogUtil.info(getClass().getName(), " Update WO Activity , Query :   " + query);
+            } else {
+                LogUtil.info(getClass().getName(), " Update WO Activity FAILED, Query:  " + query);
             }
-        } catch (Exception e) {
+        } catch (SQLException e) {
             LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
+        } finally {
+            ds.getConnection().close();
         }
-
         LogUtil.info(getClass().getName(), "Status Insert : " + status);
         return status;
     }
+    public String getParent(String wonum)throws SQLException{
+        String parent = "";
+        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
+        String query = "SELECT c_parent FROM app_fd_workorder WHERE c_wonum=?";
 
-    public JSONObject getWorkorderAttribute(String wonum) throws SQLException, JSONException {
+        try (Connection con = ds.getConnection();
+             PreparedStatement ps = con.prepareStatement(query)) {
+            ps.setString(1, wonum);
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                parent = rs.getString("c_parent");
+            }
+        } catch (SQLException e) {
+            LogUtil.error(getClass().getName(), e, "Trace error here getParent: " + e.getMessage());
+        }finally {
+            ds.getConnection().close();
+        }
+        return parent;
+    }
+
+    public JSONObject getStoServiceType(String parent) throws SQLException, JSONException {
+        JSONObject resultObj = new JSONObject();
+        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
+        //app_fd_workorder c_workzone, c_productname where c_wonum
+        String query = "SELECT c_workzone, c_productname FROM app_fd_workorder WHERE c_wonum=?";
+
+        try (Connection con = ds.getConnection();
+             PreparedStatement ps = con.prepareStatement(query)) {
+            ps.setString(1, parent);
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                resultObj.put("STO", rs.getString("c_workzone"));
+                resultObj.put("SERVICE_TYPE", rs.getString("c_productname"));
+            }
+        } catch (SQLException e) {
+            LogUtil.error(getClass().getName(), e, "Trace error here getWorkorderAttribute: " + e.getMessage());
+        }finally {
+            ds.getConnection().close();
+        }
+        return resultObj;
+    }
+    public JSONObject getWorkorderAttribute(String parent) throws SQLException, JSONException {
         JSONObject resultObj = new JSONObject();
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
         String query = "SELECT c_attr_name, c_attr_value FROM app_fd_workorderattribute WHERE c_wonum=? AND c_attr_name IN ('Service_Type', 'Package_Name')";
 
         try (Connection con = ds.getConnection();
+
+
                 PreparedStatement ps = con.prepareStatement(query)) {
-            ps.setString(1, wonum);
+            ps.setString(1, parent);
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
                 String tempCValue = rs.getString("c_attr_value");
                 resultObj.put(rs.getString("c_attr_name"), tempCValue);
             }
         } catch (SQLException e) {
-            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
+            LogUtil.error(getClass().getName(), e, "Trace error here getWorkorderAttribute: " + e.getMessage());
+        }finally {
+            ds.getConnection().close();
         }
         return resultObj;
     }
@@ -182,6 +227,11 @@ public class GenerateVLANReservationDao {
     public String createRequestReservationWithVCID(JSONArray deviceAndPorts, String reservationId, String serviceType, String sto) {
         String value = "";
         try {
+            JSONArray jar = new JSONArray();
+            JSONObject resultObj = new JSONObject();
+            resultObj.put("deviceName", "ME-A-JWB-GGK");
+            resultObj.put("portName", "2/2/11");
+            jar.put(resultObj);
 
             JSONObject req = new JSONObject();
             req.put("deviceAndPorts", deviceAndPorts);
@@ -189,6 +239,14 @@ public class GenerateVLANReservationDao {
             req.put("vlanQuantity", 1);
             req.put("serviceType", serviceType);
             req.put("sto", sto);
+
+//            Hardcode
+//            req.put("deviceAndPorts", jar);
+//            req.put("reservationId", "1-1975255091_2-VIUFJO_2-VLBE7Qb");
+//            req.put("vlanQuantity", 1);
+//            req.put("serviceType", "ASTINET");
+//            req.put("sto", "LBG");
+
             value = req.toString();
         } catch (JSONException e) {
             throw new RuntimeException(e);
@@ -197,49 +255,173 @@ public class GenerateVLANReservationDao {
         return value;
     }
 
-    public boolean unsetVLANAttribute(String wonum, Connection con) {
-        boolean status = false;
-        Date date = new Date();
-        Timestamp timestamp = new Timestamp(date.getTime());
-
-        String uuId = UuidGenerator.getInstance().getUuid();
-        String queryUpdate = "UPDATE app_fd_tk_workorderspec SET DATAMODIFIED=?,PE_VLAN='',PE_CVLAN='',PE_SVLAN='',ME_VLAN='',ME_CVLAN='',ME_SVLAN='',ME_VCID='',ME_SERVICE_VLAN='',ME_SERVICE_CVLAN='',ME_SERVICE_SVLAN='',ME_SERVICE_VCID='',AN_VLAN='',AN_CVLAN='',AN_SVLAN='',PE_SUBINTERFACE='',ME_SERVICE_SUBINTERFACE='',ME_SUBINTERFACE='',AN_SUBINTERFACE='' WHERE c_wonum=?";
-        try {
-            PreparedStatement ps = con.prepareStatement(queryUpdate);
-            ps.setTimestamp(1, timestamp);
-            ps.setString(2, wonum);
-            int count = ps.executeUpdate();
-            if (count > 0) {
-                status = true;
-            }
-        } catch (Exception e) {
-            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
-        }
-
-        LogUtil.info(getClass().getName(), "Status Insert : " + status);
-        return status;
-    }
 
     public void setSecondVLANVPNAttribute(String wonum) {
+        try{
+            updateVLANAttribute(wonum, "CPE_MGMT_PE_VLAN", peVlan);
+            updateVLANAttribute(wonum, "CPE_MGMT_PE_CVLAN",  peCVlan);
+            updateVLANAttribute(wonum, "CPE_MGMT_PE_SVLAN",  peSVlan);
+            updateVLANAttribute(wonum, "CPE_MGMT_ME_VLAN", meVlan);
+            updateVLANAttribute(wonum, "CPE_MGMT_ME_CVLAN", meCVlan);
+            updateVLANAttribute(wonum, "CPE_MGMT_ME_SVLAN", meSVlan);
+            updateVLANAttribute(wonum, "CPE_MGMT_ME_VCID", meVCID);
+            updateVLANAttribute(wonum, "CPE_MGMT_ME_SERVICE_VLAN", meServiceVlan);
+            updateVLANAttribute(wonum, "CPE_MGMT_ME_SERVICE_CVLAN", meServiceSVlan);
+            updateVLANAttribute(wonum, "CPE_MGMT_ME_SERVICE_VCID", meServiceVCID);
+            updateVLANAttribute(wonum, "CPE_MGMT_AN_VLAN", anVlan);
+            updateVLANAttribute(wonum, "CPE_MGMT_AN_CVLAN", anCVlan);
+            updateVLANAttribute(wonum, "CPE_MGMT_AN_SVLAN", anSVlan);
+        }catch (Exception e){
+            LogUtil.info(this.getClass().getName(), "\nError " + e.getMessage());
 
+        }
     }
 
     public void setSecondVLANAstinetAttribute(String wonum) {
+        try{
+//            ini belum selesai wonumnya belum di kondisikan bedasarkan workorder table
+//            orkspecSet=maximo.getMboSet("workorderspec",ui);
+//            workspecSet.setWhere("wonum in (select wonum from woactivity where parent in (select parent from woactivity where wonum='"+wonum+"')) and assetattrid in ('PE_VLAN_DOMESTIK','PE_CVLAN_DOMESTIK', 'PE_SVLAN_DOMESTIK','ME_VLAN_DOMESTIK','ME_CVLAN_DOMESTIK', 'ME_SVLAN_DOMESTIK', 'ME_VCID_DOMESTIK', 'ME_SERVICE_VLAN_DOMESTIK','ME_SERVICE_CVLAN_DOMESTIK', 'ME_SERVICE_SVLAN_DOMESTIK', 'ME_SERVICE_VCID_DOMESTIK','AN_VLAN_DOMESTIK','AN_CVLAN_DOMESTIK', 'AN_SVLAN_DOMESTIK')");
+//            workspec=workspecSet.moveFirst();
+            updateVLANAttribute(wonum, "PE_VLAN_DOMESTIK", peVlan);
+            updateVLANAttribute(wonum, "PE_CVLAN_DOMESTIK", peCVlan);
+            updateVLANAttribute(wonum, "PE_SVLAN_DOMESTIK", peSVlan);
+            updateVLANAttribute(wonum, "ME_VLAN_DOMESTIK", meVlan);
+            updateVLANAttribute(wonum, "ME_CVLAN_DOMESTIK", meCVlan);
+            updateVLANAttribute(wonum, "ME_SVLAN_DOMESTIK", meSVlan);
+            updateVLANAttribute(wonum, "ME_VCID_DOMESTIK", meVCID);
+            updateVLANAttribute(wonum, "ME_SERVICE_VLAN_DOMESTIK", meServiceVlan);
+            updateVLANAttribute(wonum, "ME_SERVICE_CVLAN_DOMESTIK", meServiceCVlan);
+            updateVLANAttribute(wonum, "ME_SERVICE_SVLAN_DOMESTIK", meServiceSVlan);
+            updateVLANAttribute(wonum, "ME_SERVICE_VCID_DOMESTIK", meServiceVCID);
+            updateVLANAttribute(wonum, "AN_VLAN_DOMESTIK", anVlan);
+            updateVLANAttribute(wonum, "AN_CVLAN_DOMESTIK", anCVlan);
+            updateVLANAttribute(wonum, "AN_SVLAN_DOMESTIK", anSVlan);
+        }catch (Exception e){
+            LogUtil.info(this.getClass().getName(), "\nError " + e.getMessage());
+        }
+    }
 
+    public String getSCOrderNo(String parent)throws SQLException{
+        String result ="";
+        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
+        String query = "SELECT c_scorderno FROM app_fd_workorder WHERE c_wonum=?";
+
+        try (Connection con = ds.getConnection();
+             PreparedStatement ps = con.prepareStatement(query)) {
+            ps.setString(1, parent);
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                result = rs.getString("c_scorderno");
+            }
+        } catch (SQLException e) {
+            LogUtil.error(getClass().getName(), e, "Trace error here getParent: " + e.getMessage());
+        }finally {
+            ds.getConnection().close();
+        }
+        return result;
+    }
+
+    public void parseDataVLAN(String responseMsg,String deviceNamePE, String deviceNameME, String deviceNameMEService, String deviceNameAN) throws SQLException, JSONException {
+        JSONArray jArray = new JSONArray(responseMsg);
+
+        for (int i=0;i<jArray.length();i++){
+            JSONObject jObject = jArray.getJSONObject(i);
+
+            String jsonArrDeviceName=jObject.has("deviceName") ? jObject.get("deviceName").toString() : null;
+            String jsonArrVlan=jObject.has("vlan") ? jObject.get("vlan").toString() : null;
+            String jsonArrCVlan=jObject.has("cVlan") ? jObject.get("cVlan").toString() : null;
+            String jsonArrSVlan=jObject.has("sVlan") ? jObject.get("sVlan").toString() : null;
+            String jsonArrVCID=jObject.has("vcID") ? jObject.get("vcID").toString() : null;
+            resultVlanReservation=resultVlanReservation+"Device Name: "+jsonArrDeviceName+"\n";
+            resultVlanReservation=resultVlanReservation+"VLAN: "+jsonArrVlan+"\n";
+            resultVlanReservation=resultVlanReservation+"CVLAN: "+jsonArrCVlan+"\n";
+            resultVlanReservation=resultVlanReservation+"SVLAN: "+jsonArrSVlan+"\n";
+            resultVlanReservation=resultVlanReservation+"VCID: "+jsonArrVCID+"\n";
+            LogUtil.info(this.getClass().getName(), "\njsonArrDeviceName : " + jsonArrDeviceName);
+            LogUtil.info(this.getClass().getName(), "\ndeviceNamePE : " + deviceNamePE);
+
+            if (jsonArrDeviceName.equalsIgnoreCase(deviceNamePE)){
+                peVlan=jsonArrVlan;
+                peCVlan=jsonArrCVlan;
+                peSVlan=jsonArrSVlan;
+                LogUtil.info(this.getClass().getName(), "\npeVlan : " + peVlan);
+                LogUtil.info(this.getClass().getName(), "\npeCVlan : " + peCVlan);
+                LogUtil.info(this.getClass().getName(), "\npeSVlan : " + peSVlan);
+            }
+            LogUtil.info(this.getClass().getName(), "\ndeviceNameME : " + deviceNameME);
+
+            if (jsonArrDeviceName.equalsIgnoreCase(deviceNameME)){
+                meVlan=jsonArrVlan;
+                meCVlan=jsonArrCVlan;
+                meSVlan=jsonArrSVlan;
+                meVCID=jsonArrVCID;
+                LogUtil.info(this.getClass().getName(), "\nmeVlan : " + meVlan);
+                LogUtil.info(this.getClass().getName(), "\nmeCVlan : " + meCVlan);
+                LogUtil.info(this.getClass().getName(), "\nmeSVlan : " + meSVlan);
+                LogUtil.info(this.getClass().getName(), "\nmeVCID : " + meVCID);
+            }
+            LogUtil.info(this.getClass().getName(), "\ndeviceNameMEService : " + deviceNameMEService);
+
+            if (jsonArrDeviceName.equalsIgnoreCase(deviceNameMEService)){
+                meServiceVlan=jsonArrVlan;
+                meServiceCVlan=jsonArrCVlan;
+                meServiceSVlan=jsonArrSVlan;
+                meServiceVCID=jsonArrVCID;
+                LogUtil.info(this.getClass().getName(), "\nmeServiceVlan : " + meServiceVlan);
+                LogUtil.info(this.getClass().getName(), "\nmeServiceCVlan : " + meServiceCVlan);
+                LogUtil.info(this.getClass().getName(), "\nmeServiceSVlan : " + meServiceSVlan);
+                LogUtil.info(this.getClass().getName(), "\nmeServiceVCID : " + meServiceVCID);
+            }
+            LogUtil.info(this.getClass().getName(), "\ndeviceNameAN : " + deviceNameAN);
+
+            if (jsonArrDeviceName.equalsIgnoreCase(deviceNameAN)){
+                anVlan=jsonArrVlan;
+                anCVlan=jsonArrCVlan;
+                anSVlan=jsonArrSVlan;
+                LogUtil.info(this.getClass().getName(), "\nanVlan : " + anVlan);
+                LogUtil.info(this.getClass().getName(), "\nanCVlan : " + anCVlan);
+                LogUtil.info(this.getClass().getName(), "\nanSVlan : " + anSVlan);
+            }
+            LogUtil.info(this.getClass().getName(), "\nresultVlanReservation : " + resultVlanReservation);
+        }
     }
 
     public String callGenerateVLANReservation(String wonum) {
         String msg = "";
 
         try {
-            DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-            Connection connection = ds.getConnection();
-
+            LogUtil.info(this.getClass().getName(), "\nWonum : "+wonum);
             JSONObject assetAttr = getAssetattrid(wonum);
-            String peVlan = assetAttr.has("PE_VLAN") ? assetAttr.get("PE_VLAN").toString() : null;
-            String meVlan = assetAttr.has("ME_VLAN") ? assetAttr.get("ME_VLAN").toString() : null;
+
+            LogUtil.info(this.getClass().getName(), "\n assetAttr: "+assetAttr);
+            String parent = getParent(wonum);
+            peVlan = assetAttr.has("PE_VLAN") ? assetAttr.get("PE_VLAN").toString() : null;
+            meVlan = assetAttr.has("ME_VLAN") ? assetAttr.get("ME_VLAN").toString() : null;
+            anVlan = assetAttr.has("AN_VLAN") ? assetAttr.get("AN_VLAN").toString() : null;
             String reservationId = assetAttr.has("RESERVATION_ID") ? assetAttr.get("RESERVATION_ID").toString() : assetAttr.has("VLAN_RESERVATION_ID") ? assetAttr.get("VLAN_RESERVATION_ID").toString() : null;
+
+            if(reservationId==null){
+                String raw = getSCOrderNo(parent);
+                LogUtil.info(this.getClass().getName(), "\nraw: " + raw);
+
+                String[] split = raw.split("_");
+                LogUtil.info(this.getClass().getName(), "\nsplit: " + split[split.length-1]);
+                reservationId = raw.replace("_"+split[split.length-1],"");
+
+            }
+            LogUtil.info(this.getClass().getName(), "\nreservationId: " + reservationId);
+
+            String sto = assetAttr.has("AREANAME") ? assetAttr.get("AREANAME").toString() : null;
             String serviceType = assetAttr.has("SERVICE_TYPE") ? assetAttr.get("SERVICE_TYPE").toString() : assetAttr.has("SERVICE_TYPE_VLAN") ? assetAttr.get("SERVICE_TYPE_VLAN").toString() : null;
+
+            if(sto == null || serviceType == null){
+                JSONObject woattr = getStoServiceType(parent);
+                LogUtil.info(this.getClass().getName(), "\n woattr : " + woattr);
+
+                sto = woattr.has("STO") ? woattr.get("STO").toString() : null;
+                serviceType = woattr.has("SERVICE_TYPE") ? woattr.get("SERVICE_TYPE").toString() : null;
+            }
             String deviceNameAN = assetAttr.has("AN_NAME") ? assetAttr.get("AN_NAME").toString() : null;
             String devicePortAN = assetAttr.has("AN_UPLINK_PORTNAME") ? assetAttr.get("AN_UPLINK_PORTNAME").toString() : null;
             String deviceNameME = assetAttr.has("ME_NAME") ? assetAttr.get("ME_NAME").toString() : null;
@@ -248,23 +430,31 @@ public class GenerateVLANReservationDao {
             String devicePortMEService = assetAttr.has("ME_SERVICE_PORTNAME") ? assetAttr.get("ME_SERVICE_PORTNAME").toString() : null;
             String deviceNamePE = assetAttr.has("PE_NAME") ? assetAttr.get("PE_NAME").toString() : null;
             String devicePortPE = assetAttr.has("PE_PORTNAME") ? assetAttr.get("PE_PORTNAME").toString() : null;
-            String anVlan = assetAttr.has("AN_VLAN") ? assetAttr.get("AN_VLAN").toString() : null;
-            String sto = assetAttr.has("AREANAME") ? assetAttr.get("AREANAME").toString() : null;
 
             String[] wonum_split = wonum.split(" ");
             String parent_wonum = wonum_split[0];
 
             LogUtil.info(this.getClass().getName(), "\nParrent WOnum : " + parent_wonum);
-            JSONObject woAttr = getWorkorderAttribute(parent_wonum);
+            JSONObject woAttr = getWorkorderAttribute(parent);
             String serviceTypePackage = woAttr.has("Service_Type") ? woAttr.get("Service_Type").toString() : null;
             String packageName = woAttr.has("Package") ? woAttr.get("Package").toString() : null;
+
+            LogUtil.info(this.getClass().getName(), "\nserviceTypePackage: " + serviceTypePackage);
+            LogUtil.info(this.getClass().getName(), "\npackageName: " + packageName);
+
 
             LogUtil.info(this.getClass().getName(), "\nAssetAttr : " + assetAttr);
             LogUtil.info(this.getClass().getName(), "\nwoATTR : " + woAttr);
             
             apiConfig = connUtil.getApiParam("uimax_dev");
-           
-            if (peVlan == "None" || meVlan == "None" || peVlan.isEmpty() || meVlan.isEmpty()) {
+            LogUtil.info(this.getClass().getName(), "\npeVlan : " + peVlan);
+            LogUtil.info(this.getClass().getName(), "\nmeVlan : " + meVlan);
+
+
+            if (peVlan == null || meVlan == null) {
+
+                LogUtil.info(this.getClass().getName(), "\n Masuk if");
+
                 String url = apiConfig.getUrl() + "api/vlan/reservationWithVCID";
 
                 LogUtil.info(this.getClass().getName(), "\nSending 'POST' request to URL 1: " + url);
@@ -277,7 +467,12 @@ public class GenerateVLANReservationDao {
                 con.setRequestProperty("Content-Type", "application/json");
                 con.setDoOutput(true);
 
-                JSONArray deviceAndPorts = new JSONArray();
+                JSONArray deviceAndPorts =generateMessageDataRequest(deviceNamePE, devicePortPE, deviceNameME, devicePortME, deviceNameMEService, devicePortMEService, deviceNameAN, devicePortAN);
+
+                LogUtil.info(this.getClass().getName(), "\n deviceAndPorts : " + deviceAndPorts);
+                LogUtil.info(this.getClass().getName(), "\n reservationId : " + reservationId);
+                LogUtil.info(this.getClass().getName(), "\n serviceType : " + serviceType);
+                LogUtil.info(this.getClass().getName(), "\n sto : " + sto);
 
                 try (OutputStream os = con.getOutputStream()) {
                     byte[] input = createRequestReservationWithVCID(deviceAndPorts, reservationId, serviceType, sto).getBytes("utf-8");
@@ -300,12 +495,32 @@ public class GenerateVLANReservationDao {
                     }
 
                     LogUtil.info(this.getClass().getName(), "\nresponse: " + response.toString());
-                    parseDataVLAN(response.toString(), deviceNamePE, deviceNameME, deviceNameMEService, deviceNameAN);
-                    updateVLANAttribute(wonum);
-                    msg = ("Generate VLAN Success.\n" + "Refresh/Reopen the order to view the VLAN Detail.\n" + resultVlanReservation);
 
+                    parseDataVLAN(response.toString(), deviceNamePE, deviceNameME,deviceNameMEService,deviceNameAN);
+
+                    updateVLANAttribute(wonum, "PE_VLAN", peVlan);
+                    updateVLANAttribute(wonum, "PE_CVLAN", peCVlan);
+                    updateVLANAttribute(wonum, "PE_SVLAN", peSVlan);
+                    updateVLANAttribute(wonum, "ME_VLAN", meVlan);
+                    updateVLANAttribute(wonum, "ME_CVLAN", meCVlan);
+                    updateVLANAttribute(wonum, "ME_SVLAN", meSVlan);
+                    updateVLANAttribute(wonum, "ME_VCID", meVCID);
+                    updateVLANAttribute(wonum, "ME_SERVICE_VLAN", meServiceVlan);
+                    updateVLANAttribute(wonum, "ME_SERVICE_CVLAN", meServiceCVlan);
+                    updateVLANAttribute(wonum, "ME_SERVICE_SVLAN", meServiceSVlan);
+                    updateVLANAttribute(wonum, "ME_SERVICE_VCID", meServiceVCID);
+                    updateVLANAttribute(wonum, "AN_VLAN", anVlan);
+                    updateVLANAttribute(wonum, "AN_CVLAN", anCVlan);
+                    updateVLANAttribute(wonum, "AN_SVLAN", anSVlan);
+                    updateVLANAttribute(wonum, "PE_SUBINTERFACE", devicePortPE+"."+peVlan);
+                    updateVLANAttribute(wonum, "ME_SERVICE_SUBINTERFACE", devicePortMEService+"."+meServiceVlan);
+                    updateVLANAttribute(wonum, "ME_SUBINTERFACE", devicePortME+"."+meVlan);
+                    updateVLANAttribute(wonum, "AN_SUBINTERFACE", devicePortAN+"."+anVlan);
+
+                    msg = ("Generate VLAN Success.\n" + "Refresh/Reopen the order to view the VLAN Detail.\n" + resultVlanReservation);
                 }
-                if ((serviceType == "VPN" && serviceTypePackage == "VPN IP Business") || (serviceType == "ASTINET" && packageName == "ASTINet Beda Bandwidth")) {
+
+                if ((serviceType.equalsIgnoreCase("VPN") && serviceTypePackage.equalsIgnoreCase("VPN IP Business")) || (serviceType.equalsIgnoreCase("ASTINET") && packageName.equalsIgnoreCase("ASTINet Beda Bandwidth"))) {
 
                     LogUtil.info(this.getClass().getName(), "\nSending 'POST' request to URL 2: " + url);
 
@@ -324,21 +539,23 @@ public class GenerateVLANReservationDao {
                         os.write(input, 0, input.length);
                     }
                     int responseCode2 = con.getResponseCode();
-                    LogUtil.info(this.getClass().getName(), "\nresponseCode status : " + responseCode2);
+                    LogUtil.info(this.getClass().getName(), "\nresponseCode status 2: " + responseCode2);
                     if (responseCode2 == 400) {
                         LogUtil.info(this.getClass().getName(), "STO not found");
                         msg = "UnReserve Second VLAN Failed";
                     } else if (responseCode2 == 200) {
-                        if (serviceType == "VPN" && serviceTypePackage == "VPN IP Business") {
+                        if (serviceType.equalsIgnoreCase("VPN") && serviceTypePackage.equalsIgnoreCase("VPN IP Business")) {
                             setSecondVLANVPNAttribute(wonum);
-                        } else if (serviceType == "ASTINET" && packageName == "ASTINET Beda Bandwidth") {
+                        } else if (serviceType.equalsIgnoreCase("ASTINET") && packageName.equalsIgnoreCase("ASTINET Beda Bandwidth")) {
                             setSecondVLANAstinetAttribute(wonum);
                         }
                         msg = msg + ("Generate Second VLAN Success.\n" + "Refresh/Reopen the order to view the VLAN Detail.\n" + resultVlanReservation);
                     }
                 }
             } else {
-                String url = "https://api-emas.telkom.co.id:8443/api/vlan/reservation?reservationId=" + reservationId;
+                LogUtil.info(this.getClass().getName(), "\n Masuk else");
+
+                String url = apiConfig.getUrl() + "api/vlan/reservation?reservationId=" + reservationId;
 
                 LogUtil.info(this.getClass().getName(), "\nSending 'Delete' request to URL : " + url);
 
@@ -363,7 +580,24 @@ public class GenerateVLANReservationDao {
                     LogUtil.info(this.getClass().getName(), "STO not found");
                     msg = "UnReserve VLAN Failed";
                 } else if (responseCode == 200) {
-                    unsetVLANAttribute(wonum, connection);
+                    updateVLANAttribute(wonum, "PE_VLAN", "None");
+                    updateVLANAttribute(wonum, "PE_CVLAN", "None");
+                    updateVLANAttribute(wonum, "PE_SVLAN", "None");
+                    updateVLANAttribute(wonum, "ME_VLAN", "None");
+                    updateVLANAttribute(wonum, "ME_CVLAN", "None");
+                    updateVLANAttribute(wonum, "ME_SVLAN", "None");
+                    updateVLANAttribute(wonum, "ME_VCID", "None");
+                    updateVLANAttribute(wonum, "ME_SERVICE_VLAN", "None");
+                    updateVLANAttribute(wonum, "ME_SERVICE_CVLAN", "None");
+                    updateVLANAttribute(wonum, "ME_SERVICE_SVLAN", "None");
+                    updateVLANAttribute(wonum, "ME_SERVICE_VCID", "None");
+                    updateVLANAttribute(wonum, "AN_VLAN", "None");
+                    updateVLANAttribute(wonum, "AN_CVLAN", "None");
+                    updateVLANAttribute(wonum, "AN_SVLAN", "None");
+                    updateVLANAttribute(wonum, "PE_SUBINTERFACE", "None");
+                    updateVLANAttribute(wonum, "ME_SERVICE_SUBINTERFACE", "None");
+                    updateVLANAttribute(wonum, "ME_SUBINTERFACE", "None");
+                    updateVLANAttribute(wonum, "AN_SUBINTERFACE", "None");
                     msg = "UnReserve VLAN Success. Refresh/Reopen order to view the VLAN detail.";
                 }
             }
@@ -371,7 +605,7 @@ public class GenerateVLANReservationDao {
         } catch (Exception e) {
             msg = e.getMessage();
             msg = "Generate VLAN Failed. General Failure.\\n" + msg;
-            LogUtil.info(this.getClass().getName(), "Trace error here :" + e.getMessage());
+            LogUtil.info(this.getClass().getName(), "Trace error here all dao :" + e.getMessage());
         }
         return msg;
     }
