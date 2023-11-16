@@ -32,6 +32,8 @@ public class GenerateVRFDao {
 
     public JSONObject getAssetattrid(String wonum) throws SQLException, JSONException {
         JSONObject resultObj = new JSONObject();
+        LogUtil.info(this.getClass().getName(), "\nwonum: " + wonum);
+
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
         String query = "SELECT c_assetattrid, c_value FROM app_fd_workorderspec WHERE c_wonum = ? AND c_assetattrid IN ('VRF_NAME','CUSTOMER_NAME', 'TOPOLOGY', 'SERVICE_TYPE', 'PE_NAME', 'RD', 'MAX_ROUTES')";
 
@@ -40,63 +42,39 @@ public class GenerateVRFDao {
             ps.setString(1, wonum);
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
-                String tempCValue = rs.getString("c_value").replace(" ", "%20");
+                String tempCValue = rs.getString("c_value");
+                if(tempCValue!= null){
+                    tempCValue.replace(" ", "%20");
+                }
                 resultObj.put(rs.getString("c_assetattrid"), tempCValue);
             }
         } catch (SQLException e) {
-            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
+            LogUtil.error(getClass().getName(), e, "Trace error getAssetattrid : " + e.getMessage());
         }
         return resultObj;
     }
-    public boolean selectWOSpec(String wonum, String rtExport, String rtImport, String rd, String max_routes, String config_vrf_pe) throws SQLException{
+    public boolean updateWOSpec(String wonum, String value, String assetAttrId) throws SQLException{
         boolean status = false;
-        Date date = new Date();
-        Timestamp timestamp = new Timestamp(date.getTime());
-
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String querySelect = "SELECT id, c_assetattrid FROM app_fd_workorderspec WHERE c_wonum = ? AND c_assetattrid IN ('RT_EXPORT','RT_IMPORT','MAX_ROUTES', 'RD', 'CONFIG_VRF_PE')";
+        String query = "UPDATE app_fd_workorderspec SET c_value=? WHERE c_wonum=?  AND c_assetattrid='" + assetAttrId+"'";
 
         try (Connection con = ds.getConnection();
-             PreparedStatement ps = con.prepareStatement(querySelect)) {
-            ps.setString(1, wonum);
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) {
-                String id = rs.getString("id");
-                String value = rs.getString("c_assetattrid");
-                if(value=="RT_EXPORT")
-                    status = updateWOSpec(id, rtExport, con);
-                if(value=="RT_IMPORT")
-                    status = updateWOSpec(id, rtImport, con);
-                if(value=="RD")
-                    status = updateWOSpec(id, rd, con);
-                if(value=="MAX_ROUTES")
-                    status = updateWOSpec(id, max_routes, con);
-                if(value=="CONFIG_VRF_PE")
-                    status = updateWOSpec(id, config_vrf_pe, con);
-//                resultObj.put(rs.getString("c_assetattrid"), tempCValue);
-
+             PreparedStatement ps = con.prepareStatement(query)) {
+            ps.setString(1, value);
+            ps.setString(2, wonum);
+            int exe = ps.executeUpdate();
+            if (exe > 0) {
+                status=true;
+                LogUtil.info(getClass().getName(), " Update WO Activity , Query :   " + query);
+            } else {
+                LogUtil.info(getClass().getName(), " Update WO Activity FAILED, Query:  " + query);
             }
         } catch (SQLException e) {
             LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
+        } finally {
+            ds.getConnection().close();
         }
-        return status;
-    }
-
-    public boolean updateWOSpec(String id, String value, Connection con) throws SQLException{
-        boolean status = false;
-        Date date = new Date();
-        Timestamp timestamp = new Timestamp(date.getTime());
-
-        String uuId = UuidGenerator.getInstance().getUuid();
-        String queryUpdate = "UPDATE app_fd_workorderspec SET c_value=? WHERE id=?";
-        PreparedStatement ps = con.prepareStatement(queryUpdate);
-        ps.setString(1, value);
-        ps.setString(1, id);
-        int count= ps.executeUpdate();
-        if(count>0){
-            status = true;
-        }
-        LogUtil.info(getClass().getName(), "Status Update : "+status);
+        LogUtil.info(getClass().getName(), "Status Insert : " + status);
         return status;
     }
 
@@ -138,13 +116,14 @@ public class GenerateVRFDao {
         try {
             JSONObject assetAttrId = getAssetattrid(wonum);
             LogUtil.info(this.getClass().getName(), "\nJSON Object: " + assetAttrId);
-            String rd = assetAttrId.has("RD")? assetAttrId.get("RD").toString():null;
-            String vrfName = assetAttrId.has("VRF_NAME")? assetAttrId.get("VRF_NAME").toString():null;
-            String owner = assetAttrId.has("CUSTOMER_NAME")? assetAttrId.get("CUSTOMER_NAME").toString():null;
-            String maxRoutes = assetAttrId.has("MAX_ROUTES")? assetAttrId.get("MAX_ROUTES").toString():null;
-            String topology = assetAttrId.has("TOPOLOGY")? assetAttrId.get("TOPOLOGY").toString():null;
-            String serviceType = assetAttrId.has("SERVICE_TYPE")? assetAttrId.get("SERVICE_TYPE").toString():null;
-            String deviceName = assetAttrId.has("PE_NAME")? assetAttrId.get("PE_NAME").toString():null;
+            String rd = assetAttrId.has("RD")? assetAttrId.get("RD").toString():"";
+            String vrfName = assetAttrId.has("VRF_NAME")? assetAttrId.get("VRF_NAME").toString():"";
+            String owner = assetAttrId.has("CUSTOMER_NAME")? assetAttrId.get("CUSTOMER_NAME").toString():"";
+            String maxRoutes = assetAttrId.has("MAX_ROUTES")? assetAttrId.get("MAX_ROUTES").toString():"";
+            String topology = assetAttrId.has("TOPOLOGY")? assetAttrId.get("TOPOLOGY").toString():"";
+            String serviceType = assetAttrId.has("SERVICE_TYPE")? assetAttrId.get("SERVICE_TYPE").toString():"";
+            String deviceName = assetAttrId.has("PE_NAME")? assetAttrId.get("PE_NAME").toString():"";
+
             LogUtil.info(this.getClass().getName(), "\nrequestCode rd : "+rd);
             LogUtil.info(this.getClass().getName(), "\nrequestCode vrfName : "+vrfName);
             LogUtil.info(this.getClass().getName(), "\nrequestCode maxRoutes : "+maxRoutes);
@@ -153,7 +132,7 @@ public class GenerateVRFDao {
             LogUtil.info(this.getClass().getName(), "\nrequestCode owner : "+owner);
             LogUtil.info(this.getClass().getName(), "\nrequestCode deviceName : "+deviceName);
 
-            if(rd!=null){
+            if(rd!=""){
                 msg = "RD is already generated. Refresh/Reopen order to view the RD, RT Import, RT Export detail.";
             }else{
                 apiConfig = connUtil.getApiParam("uimax_dev");
@@ -218,6 +197,7 @@ public class GenerateVRFDao {
                     JSONArray rtImport = new JSONArray(fixObj.get("rtImport").toString());
                     String reservedRD=fixObj.get("reservedRD").toString();
                     String jsonIsNew=fixObj.get("isNew").toString();
+                    String resultAssociateVRF = "";
                     if (jsonIsNew=="true" || jsonIsNew=="false"){
                         String urlAssociateVRF = apiConfig.getUrl()+"api/vrf/associateToDevice";
                         LogUtil.info(this.getClass().getName(), "\nSending 'POST' request to URL : " + url);
@@ -248,25 +228,39 @@ public class GenerateVRFDao {
                                 }
                             }
                             LogUtil.info(this.getClass().getName(), "\nresponse: "+responseAssociateVRF.toString());
-                            msg = "Assicate VRF Success";
+                            resultAssociateVRF = "Assicate VRF Success";
+                        }else{
+                            StringBuilder responseAssociateVRF;
+                            try(BufferedReader br = new BufferedReader(
+                                    new InputStreamReader(connAssociateVRF.getErrorStream(), "utf-8"))) {
+                                responseAssociateVRF = new StringBuilder();
+                                String responseLine = null;
+                                while ((responseLine = br.readLine()) != null) {
+                                    responseAssociateVRF.append(responseLine.trim());
+                                }
+                            }
+                            resultAssociateVRF = responseAssociateVRF.toString();
                         }
-
                     }
                     String configVRFPE ="Tidak Perlu diconfig";
-                    String resultAssociateVRF ="";
-                    if(selectWOSpec(wonum, rtExport.toString(), rtImport.toString(), reservedRD, maxRoutes, configVRFPE)){
-                        msg = "Generate VRF Success.\nRD: "+reservedRD+"\nRT Export: "+rtExport.toString()+"\nRT Import: "+rtImport.toString()+"\nCONFIG_VRF_PE: "+configVRFPE+"\nRefresh/Reopen the order to view the RT Export/ RT Export Detail"+"\nResult Associate VRF: "+msg;
-                    }
+
+                    updateWOSpec(wonum,rtExport.toString(), "RT_EXPORT");
+                    updateWOSpec(wonum,rtImport.toString(), "RT_IMPORT");
+                    updateWOSpec(wonum,maxRoutes, "MAX_ROUTES");
+                    updateWOSpec(wonum,reservedRD, "RD");
+                    updateWOSpec(wonum,configVRFPE, "CONFIG_VRF_PE");
+
+                    msg = "Generate VRF Success.\nRD: "+reservedRD+"\nRT Export: "+rtExport.toString()+"\nRT Import: "+rtImport.toString()+"\nCONFIG_VRF_PE: "+configVRFPE+"\nRefresh/Reopen the order to view the RT Export/ RT Export Detail"+"\nResult Associate VRF: "+resultAssociateVRF;
 
                 }
 
             }
         } catch (Exception e) {
             msg = e.getMessage();
-            if(msg.contains("400")){
-                msg = "Associate VRF Failed\n"+e.getMessage();
-            }
-            LogUtil.info(this.getClass().getName(), "Trace error here :" + e.getMessage());
+//            if(msg.contains("400")){
+//                msg = "Associate VRF Failed\n"+e.getMessage();
+//            }
+            LogUtil.info(this.getClass().getName(), "Trace error callGenerateVRF :" + e.getMessage());
         }
         return msg;
     }
