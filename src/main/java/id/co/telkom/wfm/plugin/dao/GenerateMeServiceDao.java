@@ -5,88 +5,44 @@
  */
 package id.co.telkom.wfm.plugin.dao;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.*;
 import id.co.telkom.wfm.plugin.kafka.ResponseKafka;
-import id.co.telkom.wfm.plugin.model.APIConfig;
-import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
-import id.co.telkom.wfm.plugin.util.ConnUtil;
-import id.co.telkom.wfm.plugin.util.FormatLogIntegrationHistory;
-import id.co.telkom.wfm.plugin.util.ValidateTaskAttribute;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import id.co.telkom.wfm.plugin.model.*;
+import id.co.telkom.wfm.plugin.util.*;
+import java.io.*;
+import java.net.*;
+import java.sql.*;
 import javax.sql.DataSource;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.commons.util.LogUtil;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-//import org.json.simple.JSONArray;
+import org.json.*;
 
 /**
  *
  * @author ASUS
  */
 public class GenerateMeServiceDao {
-
+    // Insert integration history
     FormatLogIntegrationHistory insertIntegrationHistory = new FormatLogIntegrationHistory();
     ResponseKafka responseKafka = new ResponseKafka();
+    // Get URL from DB
     ConnUtil connUtil = new ConnUtil();
     APIConfig apiConfig = new APIConfig();
+    // call function attribute value, attribute, update attribute ect. 
     ValidateTaskAttribute validateAttribute = new ValidateTaskAttribute();
-
-    public JSONObject getAssetattridType(String wonum) throws SQLException, JSONException {
-        JSONObject resultObj = new JSONObject();
-        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String query = "SELECT c_assetattrid, c_value FROM app_fd_workorderspec WHERE c_wonum = ? AND c_assetattrid IN ('PE_NAME','PE_PORTNAME', 'ME_SERVICE_IPADDRESS', 'NTE_TYPE')";
-        try (Connection con = ds.getConnection();
-                PreparedStatement ps = con.prepareStatement(query)) {
-            ps.setString(1, wonum);
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) {
-                resultObj.put(rs.getString("c_assetattrid"), rs.getString("c_value"));
-            }
-        } catch (SQLException e) {
-            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
-        }
-        return resultObj;
-    }
-
-    public String getAssetattrid(String wonum) throws SQLException, JSONException {
-        String resultObj = "";
-        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String query = "SELECT c_assetattrid FROM app_fd_workorderspec WHERE c_wonum = ? AND c_assetattrid = 'NTE_TYPE'";
-        try (Connection con = ds.getConnection();
-                PreparedStatement ps = con.prepareStatement(query)) {
-            ps.setString(1, wonum);
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) {
-                resultObj = rs.getString("c_assetattrid");
-            }
-        } catch (SQLException e) {
-            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
-        }
-        return resultObj;
-    }
 
     public String callGenerateMeService(String wonum, ListGenerateAttributes listGenerate) {
         JSONObject msg = new JSONObject();
         String message = "";
 
         try {
-            JSONObject assetAttributes = getAssetattridType(wonum);
-
+            JSONObject assetAttributes = validateAttribute.getValueAttribute(wonum, "c_assetattrid IN ('PE_NAME','PE_PORTNAME', 'ME_SERVICE_IPADDRESS', 'NTE_TYPE')");
+            
             String deviceName = assetAttributes.optString("PE_NAME", "null");
             String portname = assetAttributes.optString("PE_PORTNAME", "null").replace("/", "%2F");
             String ipaddress = assetAttributes.optString("ME_SERVICE_IPADDRESS", "null");
-            String nteType = assetAttributes.optString("NTE_TYPE");
-            String attributeNTE = getAssetattrid(wonum);
+            String nteType = validateAttribute.getAttribute(wonum, "NTE_TYPE");
+            LogUtil.info(getClass().getName(),"NTE_TYPE : " + nteType);
 
             apiConfig = connUtil.getApiParam("uimax_dev");
             String URL = apiConfig.getUrl();
@@ -95,20 +51,17 @@ public class GenerateMeServiceDao {
             String urlByIp = URL + "api/device/find?" + "ipAddress=" + ipaddress;
             URL getDeviceLinkPort = new URL(url);
             URL getDeviceLinkPortByIp = new URL(urlByIp);
-            LogUtil.info(getClass().getName(), "URL : " + url);
-            LogUtil.info(getClass().getName(), "URL By  : " + urlByIp);
 
-            if (!attributeNTE.isEmpty()) {
+            if (!nteType.isEmpty()) {
                 if (nteType.equals("DirectME")) {
                     HttpURLConnection con = (HttpURLConnection) getDeviceLinkPortByIp.openConnection();
 
                     con.setRequestMethod("GET");
                     con.setRequestProperty("Accept", "application/json");
                     int responseCode = con.getResponseCode();
-                    LogUtil.info(this.getClass().getName(), "\nSending 'GET' request to URL : " + urlByIp);
                     LogUtil.info(this.getClass().getName(), "Response Code : " + responseCode);
 
-                    if (responseCode == 400) {
+                    if (responseCode == 404) {
                         LogUtil.info(this.getClass().getName(), "ME Service Not found!");
                         msg.put("ME Service", "None");
                     } else if (responseCode == 200) {
@@ -142,7 +95,6 @@ public class GenerateMeServiceDao {
                         LogUtil.info(this.getClass().getName(), "ME SERVICE IPADDRESS :" + ipAddress);
 
                         // Update Data ME SERVICE BY IPADDRESS
-//                        updateDeviceLinkPortByIp(wonum, manufactur, name, ipAddress);
                         LogUtil.info(this.getClass().getName(), "Update data successfully");
                         validateAttribute.updateWO("app_fd_workorderspec", "c_value='" + manufactur + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='ME_SERVICE_MANUFACTUR'");
                         validateAttribute.updateWO("app_fd_workorderspec", "c_value='" + name + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='ME_SERVICE_NAME'");
@@ -207,7 +159,6 @@ public class GenerateMeServiceDao {
             } else {
                 LogUtil.info(getClass().getName(), "NTE_TYPE tidak ada");
                 message = "NTE_TYPE is empty!";
-
             }
 
         } catch (Exception e) {

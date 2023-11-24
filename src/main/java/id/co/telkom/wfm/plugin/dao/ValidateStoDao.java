@@ -6,24 +6,15 @@
 package id.co.telkom.wfm.plugin.dao;
 
 import id.co.telkom.wfm.plugin.kafka.ResponseKafka;
-import id.co.telkom.wfm.plugin.model.APIConfig;
-import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
-import id.co.telkom.wfm.plugin.util.ConnUtil;
-import id.co.telkom.wfm.plugin.util.FormatLogIntegrationHistory;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import id.co.telkom.wfm.plugin.model.*;
+import id.co.telkom.wfm.plugin.util.*;
+import java.io.*;
+import java.net.*;
+import java.sql.*;
 import javax.sql.DataSource;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.commons.util.LogUtil;
-import org.json.JSONException;
-import org.json.JSONObject;
-//import org.json.simple.JSONObject;
+import org.json.*;
 
 /**
  *
@@ -33,65 +24,19 @@ public class ValidateStoDao {
 
     FormatLogIntegrationHistory insertIntegrationHistory = new FormatLogIntegrationHistory();
     ResponseKafka responseKafka = new ResponseKafka();
+    ConnUtil connUtil = new ConnUtil();
+    APIConfig apiConfig = new APIConfig();
+    ValidateTaskAttribute functionAttribute = new ValidateTaskAttribute();
 
-    public JSONObject getAssetattrid(String wonum) throws SQLException, JSONException {
-        JSONObject resultObj = new JSONObject();
-        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String query = "SELECT c_description, c_value FROM app_fd_workorderspec WHERE c_wonum = ? AND c_description IN ('PRODUCT_TYPE','LATITUDE','LONGITUDE')";
-        try (Connection con = ds.getConnection();
-                PreparedStatement ps = con.prepareStatement(query)) {
-            ps.setString(1, wonum);
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) {
-                resultObj.put(rs.getString("c_description"), rs.getString("c_value"));
-            }
-        } catch (SQLException e) {
-            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
-        }
-        return resultObj;
-    }
-
-    public boolean updateSto(String wonum, String sto, String region, String witel, String datel) {
-        boolean result = false;
-        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String updateQuery
-                = "UPDATE APP_FD_WORKORDERSPEC "
-                + "SET c_value = CASE c_description "
-                + "WHEN 'STO' THEN ? "
-                + "WHEN 'REGION' THEN ? "
-                + "WHEN 'WITEL' THEN ? "
-                + "WHEN 'DATEL' THEN ? "
-                + "ELSE 'Missing' END "
-                + "WHERE c_wonum = ? "
-                + "AND c_description IN ('STO', 'REGION', 'WITEL', 'DATEL')";
-
-        try (Connection con = ds.getConnection();
-                PreparedStatement ps = con.prepareStatement(updateQuery)) {
-            ps.setString(1, sto);
-            ps.setString(2, region);
-            ps.setString(3, witel);
-            ps.setString(4, datel);
-            ps.setString(5, wonum);
-
-            int exe = ps.executeUpdate();
-            if (exe > 0) {
-                result = true;
-                LogUtil.info(getClass().getName(), "STO updated to " + wonum);
-            }
-        } catch (SQLException e) {
-            LogUtil.error(getClass().getName(), e, "Trace error here: " + e.getMessage());
-        }
-        return result;
-    }
 
     public JSONObject callUimaxStoValidation(String wonum, ListGenerateAttributes listGenerate) {
         JSONObject msg = new JSONObject();
-        ConnUtil connUtil = new ConnUtil();
-        APIConfig apiConfig = new APIConfig();
+        String message = "";
+
         apiConfig = connUtil.getApiParam("uimax_dev");
 
         try {
-            JSONObject assetattr = getAssetattrid(wonum);
+            JSONObject assetattr = functionAttribute.getValueAttribute(wonum, "c_assetattrid IN ('PRODUCT_TYPE','LATITUDE','LONGITUDE')");
             String serviceType = "";
             String productType = assetattr.optString("PRODUCT_TYPE");
             String latitude = assetattr.optString("LATITUDE", null);
@@ -117,11 +62,11 @@ public class ValidateStoDao {
 
             if (responseCode != 200) {
                 if (latitude.equals("null") || longitude.equals("null")) {
-                    msg.put("message", "Please fill the LONGITUDE and LATITUDE attribute. Then regenerate STO.");
+                    message = "Please fill the LONGITUDE and LATITUDE attribute. Then regenerate STO.";
                 } else {
                     LogUtil.info(this.getClass().getName(), "STO not found");
                     listGenerate.setStatusCode(responseCode);
-                    msg.put("STO", "None");
+                    message = "STO not found!";
                     JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "VALIDATESTO", apiConfig.getUrl(), "Success", url, "STO Not Found");
                     String kafkaRes = formatResponse.toString();
                     responseKafka.IntegrationHistory(kafkaRes);
@@ -154,10 +99,10 @@ public class ValidateStoDao {
                 JSONObject datelObj = jsonObject.getJSONObject("datel");
                 String datel = datelObj.getString("name");
 
-                msg.put("STO", sto);
-                msg.put("REGION", region);
-                msg.put("WITEL", witel);
-                msg.put("DATEL", datel);
+                message = "STO : " + sto + ""
+                        + "REGIONAL : " + region + ""
+                        + "WITEL : " + witel + ""
+                        + "DATEL : " + datel + "";
 
                 LogUtil.info(this.getClass().getName(), "STO : " + sto);
                 LogUtil.info(this.getClass().getName(), "STO Description : " + stodesc);
@@ -166,7 +111,10 @@ public class ValidateStoDao {
                 LogUtil.info(this.getClass().getName(), "Datel : " + datel);
 
                 // Update STO, REGION, WITEL, DATEL from table WORKORDERSPEC
-                updateSto(wonum, sto, region, witel, datel);
+                functionAttribute.updateWO("app_fd_workorderspec", "c_value='" + sto + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='STO'");
+                functionAttribute.updateWO("app_fd_workorderspec", "c_value='" + region + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='REGION'");
+                functionAttribute.updateWO("app_fd_workorderspec", "c_value='" + witel + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='WITEL'");
+                functionAttribute.updateWO("app_fd_workorderspec", "c_value='" + datel + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='DATEL'");
 
                 JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "VALIDATESTO", apiConfig.getUrl(), "Success", url, jsonData);
                 String kafkaRes = formatResponse.toString();
