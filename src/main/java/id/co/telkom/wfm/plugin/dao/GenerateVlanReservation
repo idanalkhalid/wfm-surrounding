@@ -1,0 +1,463 @@
+from java.util import Properties;
+from java.net import URL;
+from java.io import BufferedReader;
+from java.io import InputStreamReader;
+from java.io import OutputStream;
+from com.ibm.json.java import JSONObject;
+from com.ibm.json.java import JSONArray;
+from psdi.server import MXServer
+from java.lang import System;
+from psdi.security import UserInfo;
+import javax.net.ssl.X509TrustManager;
+import javax.net.ssl.HostnameVerifier;
+import java.security.SecureRandom;
+
+maximo = MXServer.getMXServer() ;
+ui = maximo.getSystemUserInfo () ;
+
+
+def insertIntegrationHistory(wonum,apitype,request,response):
+   integrationHistorySet = maximo.getMboSet("INTEGRATION_HISTORY",ui)
+   newRecordIntegrationHistory = integrationHistorySet.add()
+   newRecordIntegrationHistory.setValue("REFERENCEID",wonum)
+   newRecordIntegrationHistory.setValue("INTEGRATION_TYPE","RESERVEVLAN")
+   newRecordIntegrationHistory.setValue("PARAM1",apitype)
+   newRecordIntegrationHistory.setValue("REQUEST",str(request))
+   newRecordIntegrationHistory.setValue("RESPONSE",str(response))
+   newRecordIntegrationHistory.setValue("EXEC_DATE",currDate)
+   integrationHistorySet.save()
+
+def displayMsg(msgError):
+   global errorkey,errorgroup,params, e
+   errorgroup = "WORKORDER";
+   errorkey = "WFMINFO";
+   params = [msgError];
+
+propName="telkom.endpoint.uimax";
+propValue = maximo.getProperty(propName);
+
+stringUrl=str(propValue);
+
+def getUrl():
+    return stringUrl+"/api/vlan/reservationWithVCID";
+
+def getUrlUn(reservationId):
+    return stringUrl+"/api/vlan/reservation?reservationId="+reservationId;
+
+class MyTrustManager(javax.net.ssl.X509TrustManager):
+    def checkClientTrusted(self,chain,authtype):
+        pass;
+    def checkServerTrusted(self,chain,authtype):
+        pass;
+    def getAcceptedIssuers(self):
+        return None ;
+
+class MyHostnameVerifier(javax.net.ssl.HostnameVerifier):
+    def verify(self, hostname, session):
+        return True
+
+def setupSSLFactory():
+    tm = [MyTrustManager()];
+    sc = javax.net.ssl.SSLContext.getInstance("SSL");
+    rs=java.security.SecureRandom();
+    sc.init(None,tm,rs) ;
+    allHostsValid=MyHostnameVerifier();
+    javax.net.ssl.HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory()) ;
+    javax.net.ssl.HttpsURLConnection.setDefaultHostnameVerifier(allHostsValid) ;
+
+serviceType="";
+serviceTypePackage="";
+package="";
+sto=mbo.getString("WORKZONE");
+vlanQuantity="1";
+reservationId="";
+deviceNameAN="";
+devicePortAN="";
+deviceNameME="";
+devicePortME="";
+deviceNameMEService="";
+devicePortMEService="";
+deviceNamePE="";
+devicePortPE="";
+listDevice="";
+detailActCode = mbo.getString("DETAILACTCODE")
+peVlan="";
+peCVlan="";
+peSVlan="";
+meVlan="";
+meCVlan="";
+meSVlan="";
+meVCID="";
+meServiceVlan="";
+meServiceCVlan="";
+meServiceSVlan="";
+meServiceVCID="";
+anVlan="";
+anCVlan="";
+anSVlan="";
+SBCName="";
+SBCPortName="";
+SBCMEMain="";
+SBCMEMainPort="";
+SBCMEBackup="";
+SBCMEBackupPort="";
+SBCCvlan="";
+SBCSvlan="";
+SBCMainCvlan="";
+SBCMainSvlan="";
+SBCMainVcid="";
+SBCBackupCvlan="";
+SBCBackupSvlan="";
+SBCBackupVcid="";
+
+currDate=maximo.getDate();
+
+resultVlanReservation="";
+
+wonum=mbo.getString("wonum");
+wospecSet=maximo.getMboSet("workorderspec",ui);
+wospecSet.setWhere("wonum in (select wonum from woactivity where parent in (select parent from woactivity where wonum='"+wonum+"')) and assetattrid in ('AN_NAME','AN_UPLINK_PORTNAME', 'AREANAME', 'ME_NAME', 'ME_PORTNAME', 'ME_SERVICE_NAME', 'ME_SERVICE_PORTNAME','PE_NAME','PE_PORTNAME','RESERVATION_ID','SERVICE_TYPE','PE_VLAN','SERVICE_TYPE_VLAN','VLAN_RESERVATION_ID','ME_VLAN','AN_VLAN')");
+wospec=wospecSet.moveFirst();
+while (wospec!=None):
+   assetattrid=wospec.getString("assetattrid");
+   if(assetattrid=="AN_NAME"):
+      deviceNameAN=wospec.getString("alnvalue");
+   if(assetattrid=="AN_UPLINK_PORTNAME"):
+      devicePortAN=wospec.getString("alnvalue");
+   if(assetattrid=="AREANAME"):
+      sto=wospec.getString("alnvalue");
+   if(assetattrid=="ME_NAME"):
+      deviceNameME=wospec.getString("alnvalue");
+   if(assetattrid=="ME_PORTNAME"):
+      devicePortME=wospec.getString("alnvalue");
+   if(assetattrid=="ME_SERVICE_NAME"):
+      deviceNameMEService=wospec.getString("alnvalue");
+   if(assetattrid=="ME_SERVICE_PORTNAME"):
+      devicePortMEService=wospec.getString("alnvalue");
+   if(assetattrid=="PE_NAME"):
+      deviceNamePE=wospec.getString("alnvalue");
+   if(assetattrid=="PE_PORTNAME"):
+      devicePortPE=wospec.getString("alnvalue");
+   if(assetattrid=="RESERVATION_ID") or (assetattrid=="VLAN_RESERVATION_ID"):
+      reservationId=wospec.getString("alnvalue");
+   if(assetattrid=="SERVICE_TYPE_VLAN" or assetattrid=="SERVICE_TYPE"):
+      serviceType=wospec.getString("alnvalue");
+   if(assetattrid=="PE_VLAN"):
+      peVlan=wospec.getString("alnvalue");
+   if(assetattrid=="ME_VLAN"):
+      meVlan=wospec.getString("alnvalue");
+   if(assetattrid=="AN_VLAN"):
+      anVlan=wospec.getString("alnvalue");
+   wospec=wospecSet.moveNext();
+wospecSet.close();
+
+workAttrSet=maximo.getMboSet("workorderattribute",ui);
+workAttrSet.setWhere("wonum in (select parent from woactivity where wonum='"+wonum+"') and attr_name in ('Service_Type', 'Package_Name')");
+workAttr=workAttrSet.moveFirst();
+while (workAttr!=None):
+  attrName=workAttr.getString("attr_name");
+  if(attrName=="Service_Type"):
+    serviceTypePackage=workAttr.getString("attr_value");
+  if(attrName=="Package"):
+    package=workAttr.getString("attr_value");
+  workAttr=workAttrSet.moveNext();
+workAttrSet.close();
+
+def generateMessageDataRequest():
+  global listDevice, deviceNameAN, devicePortAN, deviceNameME, devicePortME, deviceNameMEService, devicePortMEService, deviceNamePE, devicePortPE , reservationId
+  if (deviceNameAN!=""):
+    listDevice=listDevice+ '{ "deviceName": "'+deviceNameAN+'", "portName": "'+devicePortAN+'" }, ';
+  if (deviceNameME!=""):
+    listDevice=listDevice+ '{ "deviceName": "'+deviceNameME+'", "portName": "'+devicePortME+'" }, ';
+  if (deviceNameMEService!=""):
+    listDevice=listDevice+ '{ "deviceName": "'+deviceNameMEService+'", "portName": "'+devicePortMEService+'" }, ';
+  if (deviceNamePE!=""):
+    listDevice=listDevice+ '{ "deviceName": "'+deviceNamePE+'", "portName": "'+devicePortPE+'" }, ';
+  messageData='{ "serviceType": "'+serviceType+'", "sto": "'+sto+'", "vlanQuantity": 1, "deviceAndPorts": [ '+listDevice+' ], "reservationId": "'+reservationId+'"}';
+  messageData=messageData.replace(",  ]"," ]");#remove last comma
+  return messageData;
+
+def parseDataVLAN(responseMessage):
+  global resultVlanReservation, peVlan, peCVlan, peSVlan, meVlan, meCVlan, meSVlan, meVCID, meServiceVlan, meServiceCVlan, meServiceSVlan, meServiceVCID, anVlan, anCVlan, anSVlan
+  i=0;
+  jsonArr=responseMessage;
+  while (i<jsonArr.size()):
+    jsonArrDeviceName=str(jsonArr[i].get("deviceName"));
+    jsonArrVlan=str(jsonArr[i].get("vlan"));
+    jsonArrCVlan=str(jsonArr[i].get("cVlan"));
+    jsonArrSVlan=str(jsonArr[i].get("sVlan"));
+    jsonArrVCID=str(jsonArr[i].get("vcID"));
+    resultVlanReservation=resultVlanReservation+"Device Name: "+jsonArrDeviceName+"\n"
+    resultVlanReservation=resultVlanReservation+"VLAN: "+jsonArrVlan+"\n"
+    resultVlanReservation=resultVlanReservation+"CVLAN: "+jsonArrCVlan+"\n"
+    resultVlanReservation=resultVlanReservation+"SVLAN: "+jsonArrSVlan+"\n"
+    resultVlanReservation=resultVlanReservation+"VCID: "+jsonArrVCID+"\n"
+    if (jsonArrDeviceName==deviceNamePE):
+      peVlan=jsonArrVlan;
+      peCVlan=jsonArrCVlan;
+      peSVlan=jsonArrSVlan;
+    if (jsonArrDeviceName==deviceNameME):
+      meVlan=jsonArrVlan;
+      meCVlan=jsonArrCVlan;
+      meSVlan=jsonArrSVlan;
+      meVCID=jsonArrVCID;
+    if (jsonArrDeviceName==deviceNameMEService):
+      meServiceVlan=jsonArrVlan;
+      meServiceCVlan=jsonArrCVlan;
+      meServiceSVlan=jsonArrSVlan;
+      meServiceVCID=jsonArrVCID;
+    if (jsonArrDeviceName==deviceNameAN):
+      anVlan=jsonArrVlan;
+      anCVlan=jsonArrCVlan;
+      anSVlan=jsonArrSVlan;
+    i=i+1;
+
+def setVLANAttribute(wonum):
+  workspecSet=maximo.getMboSet("workorderspec",ui);
+  workspecSet.setWhere("wonum='"+wonum+"' and assetattrid in ('PE_VLAN','PE_CVLAN', 'PE_SVLAN','ME_VLAN','ME_CVLAN', 'ME_SVLAN', 'ME_VCID', 'ME_SERVICE_VLAN','ME_SERVICE_CVLAN', 'ME_SERVICE_SVLAN', 'ME_SERVICE_VCID','AN_VLAN','AN_CVLAN', 'AN_SVLAN', 'PE_SUBINTERFACE', 'ME_SERVICE_SUBINTERFACE' , 'ME_SUBINTERFACE', 'AN_SUBINTERFACE')");
+  workspec=workspecSet.moveFirst();
+  while (workspec!=None):
+    assetattrid=workspec.getString("assetattrid");
+    if(assetattrid=="PE_VLAN"):
+      workspec.setValue("alnvalue",peVlan);
+    if(assetattrid=="PE_CVLAN"):
+      workspec.setValue("alnvalue",peCVlan);
+    if(assetattrid=="PE_SVLAN"):
+      workspec.setValue("alnvalue",peSVlan);
+    if(assetattrid=="ME_VLAN"):
+      workspec.setValue("alnvalue",meVlan);
+    if(assetattrid=="ME_CVLAN"):
+      workspec.setValue("alnvalue",meCVlan);
+    if(assetattrid=="ME_SVLAN"):
+      workspec.setValue("alnvalue",meSVlan);
+    if(assetattrid=="ME_VCID"):
+      workspec.setValue("alnvalue",meVCID);
+    if(assetattrid=="ME_SERVICE_VLAN"):
+      workspec.setValue("alnvalue",meServiceVlan);
+    if(assetattrid=="ME_SERVICE_CVLAN"):
+      workspec.setValue("alnvalue",meServiceCVlan);
+    if(assetattrid=="ME_SERVICE_SVLAN"):
+      workspec.setValue("alnvalue",meServiceSVlan);
+    if(assetattrid=="ME_SERVICE_VCID"):
+      workspec.setValue("alnvalue",meServiceVCID);
+    if(assetattrid=="AN_VLAN"):
+      workspec.setValue("alnvalue",anVlan);
+    if(assetattrid=="AN_CVLAN"):
+      workspec.setValue("alnvalue",anCVlan);
+    if(assetattrid=="AN_SVLAN"):
+      workspec.setValue("alnvalue",anSVlan);
+    if(assetattrid=="PE_SUBINTERFACE"):
+      workspec.setValue("alnvalue",devicePortPE+"."+peVlan);
+    if(assetattrid=="ME_SERVICE_SUBINTERFACE"):
+      workspec.setValue("alnvalue",devicePortMEService+"."+meServiceVlan);
+    if(assetattrid=="ME_SUBINTERFACE"):
+      workspec.setValue("alnvalue",devicePortME+"."+meVlan);
+    if(assetattrid=="AN_SUBINTERFACE"):
+      workspec.setValue("alnvalue",devicePortAN+"."+anVlan);
+    workspec=workspecSet.moveNext();
+  workspecSet.save();
+  workspecSet.close();
+
+def unsetVLANAttribute(wonum):
+  workspecSet=maximo.getMboSet("workorderspec",ui);
+  workspecSet.setWhere("wonum='"+wonum+"' and assetattrid in ('PE_VLAN','PE_CVLAN', 'PE_SVLAN','ME_VLAN','ME_CVLAN', 'ME_SVLAN', 'ME_VCID', 'ME_SERVICE_VLAN','ME_SERVICE_CVLAN', 'ME_SERVICE_SVLAN', 'ME_SERVICE_VCID','AN_VLAN','AN_CVLAN', 'AN_SVLAN', 'PE_SUBINTERFACE', 'ME_SERVICE_SUBINTERFACE' , 'ME_SUBINTERFACE', 'AN_SUBINTERFACE')");
+  workspec=workspecSet.moveFirst();
+  while (workspec!=None):
+    assetattrid=workspec.getString("assetattrid");
+    if(assetattrid=="PE_VLAN"):
+      workspec.setValue("alnvalue","None");
+    if(assetattrid=="PE_CVLAN"):
+      workspec.setValue("alnvalue","None");
+    if(assetattrid=="PE_SVLAN"):
+      workspec.setValue("alnvalue","None");
+    if(assetattrid=="ME_VLAN"):
+      workspec.setValue("alnvalue","None");
+    if(assetattrid=="ME_CVLAN"):
+      workspec.setValue("alnvalue","None");
+    if(assetattrid=="ME_SVLAN"):
+      workspec.setValue("alnvalue","None");
+    if(assetattrid=="ME_VCID"):
+      workspec.setValue("alnvalue","None");
+    if(assetattrid=="ME_SERVICE_VLAN"):
+      workspec.setValue("alnvalue","None");
+    if(assetattrid=="ME_SERVICE_CVLAN"):
+      workspec.setValue("alnvalue","None");
+    if(assetattrid=="ME_SERVICE_SVLAN"):
+      workspec.setValue("alnvalue","None");
+    if(assetattrid=="ME_SERVICE_VCID"):
+      workspec.setValue("alnvalue","None");
+    if(assetattrid=="AN_VLAN"):
+      workspec.setValue("alnvalue","None");
+    if(assetattrid=="AN_CVLAN"):
+      workspec.setValue("alnvalue","None");
+    if(assetattrid=="AN_SVLAN"):
+      workspec.setValue("alnvalue","None");
+    if(assetattrid=="PE_SUBINTERFACE"):
+      workspec.setValue("alnvalue","None");
+    if(assetattrid=="ME_SERVICE_SUBINTERFACE"):
+      workspec.setValue("alnvalue","None");
+    if(assetattrid=="ME_SUBINTERFACE"):
+      workspec.setValue("alnvalue","None");
+    if(assetattrid=="AN_SUBINTERFACE"):
+      workspec.setValue("alnvalue","None");
+    workspec=workspecSet.moveNext();
+  workspecSet.save();
+  workspecSet.close();
+
+def setSecondVLANVPNAttribute(wonum):
+  workspecSet=maximo.getMboSet("workorderspec",ui);
+  workspecSet.setWhere("wonum='"+wonum+"' and assetattrid in ('CPE_MGMT_PE_VLAN','CPE_MGMT_PE_CVLAN', 'CPE_MGMT_PE_SVLAN','CPE_MGMT_ME_VLAN','CPE_MGMT_ME_CVLAN', 'CPE_MGMT_ME_SVLAN', 'CPE_MGMT_ME_VCID', 'CPE_MGMT_ME_SERVICE_VLAN','CPE_MGMT_ME_SERVICE_CVLAN', 'CPE_MGMT_ME_SERVICE_SVLAN', 'CPE_MGMT_ME_SERVICE_VCID','CPE_MGMT_AN_VLAN','CPE_MGMT_AN_CVLAN', 'CPE_MGMT_AN_SVLAN')");
+  workspec=workspecSet.moveFirst();
+  while (workspec!=None):
+    assetattrid=workspec.getString("assetattrid");
+    if(assetattrid=="CPE_MGMT_PE_VLAN"):
+      workspec.setValue("alnvalue",peVlan);
+    if(assetattrid=="CPE_MGMT_PE_CVLAN"):
+      workspec.setValue("alnvalue",peCVlan);
+    if(assetattrid=="CPE_MGMT_PE_SVLAN"):
+      workspec.setValue("alnvalue",peSVlan);
+    if(assetattrid=="CPE_MGMT_ME_VLAN"):
+      workspec.setValue("alnvalue",meVlan);
+    if(assetattrid=="CPE_MGMT_ME_CVLAN"):
+      workspec.setValue("alnvalue",meCVlan);
+    if(assetattrid=="CPE_MGMT_ME_SVLAN"):
+      workspec.setValue("alnvalue",meSVlan);
+    if(assetattrid=="CPE_MGMT_ME_VCID"):
+      workspec.setValue("alnvalue",meVCID);
+    if(assetattrid=="CPE_MGMT_ME_SERVICE_VLAN"):
+      workspec.setValue("alnvalue",meServiceVlan);
+    if(assetattrid=="CPE_MGMT_ME_SERVICE_CVLAN"):
+      workspec.setValue("alnvalue",meServiceCVlan);
+    if(assetattrid=="CPE_MGMT_ME_SERVICE_SVLAN"):
+      workspec.setValue("alnvalue",meServiceSVlan);
+    if(assetattrid=="CPE_MGMT_ME_SERVICE_VCID"):
+      workspec.setValue("alnvalue",meServiceVCID);
+    if(assetattrid=="CPE_MGMT_AN_VLAN"):
+      workspec.setValue("alnvalue",anVlan);
+    if(assetattrid=="CPE_MGMT_AN_CVLAN"):
+      workspec.setValue("alnvalue",anCVlan);
+    if(assetattrid=="CPE_MGMT_AN_SVLAN"):
+      workspec.setValue("alnvalue",anSVlan);
+    workspec=workspecSet.moveNext();
+  workspecSet.save();
+  workspecSet.close();
+
+def setSecondVLANAstinetAttribute(wonum):
+  workspecSet=maximo.getMboSet("workorderspec",ui);
+  workspecSet.setWhere("wonum in (select wonum from woactivity where parent in (select parent from woactivity where wonum='"+wonum+"')) and assetattrid in ('PE_VLAN_DOMESTIK','PE_CVLAN_DOMESTIK', 'PE_SVLAN_DOMESTIK','ME_VLAN_DOMESTIK','ME_CVLAN_DOMESTIK', 'ME_SVLAN_DOMESTIK', 'ME_VCID_DOMESTIK', 'ME_SERVICE_VLAN_DOMESTIK','ME_SERVICE_CVLAN_DOMESTIK', 'ME_SERVICE_SVLAN_DOMESTIK', 'ME_SERVICE_VCID_DOMESTIK','AN_VLAN_DOMESTIK','AN_CVLAN_DOMESTIK', 'AN_SVLAN_DOMESTIK')");
+  workspec=workspecSet.moveFirst();
+  while (workspec!=None):
+    assetattrid=workspec.getString("assetattrid");
+    if(assetattrid=="PE_VLAN_DOMESTIK"):
+      workspec.setValue("alnvalue",peVlan);
+    if(assetattrid=="PE_CVLAN_DOMESTIK"):
+      workspec.setValue("alnvalue",peCVlan);
+    if(assetattrid=="PE_SVLAN_DOMESTIK"):
+      workspec.setValue("alnvalue",peSVlan);
+    if(assetattrid=="ME_VLAN_DOMESTIK"):
+      workspec.setValue("alnvalue",meVlan);
+    if(assetattrid=="ME_CVLAN_DOMESTIK"):
+      workspec.setValue("alnvalue",meCVlan);
+    if(assetattrid=="ME_SVLAN_DOMESTIK"):
+      workspec.setValue("alnvalue",meSVlan);
+    if(assetattrid=="ME_VCID_DOMESTIK"):
+      workspec.setValue("alnvalue",meVCID);
+    if(assetattrid=="ME_SERVICE_VLAN_DOMESTIK"):
+      workspec.setValue("alnvalue",meServiceVlan);
+    if(assetattrid=="ME_SERVICE_CVLAN_DOMESTIK"):
+      workspec.setValue("alnvalue",meServiceCVlan);
+    if(assetattrid=="ME_SERVICE_SVLAN_DOMESTIK"):
+      workspec.setValue("alnvalue",meServiceSVlan);
+    if(assetattrid=="ME_SERVICE_VCID_DOMESTIK"):
+      workspec.setValue("alnvalue",meServiceVCID);
+    if(assetattrid=="AN_VLAN_DOMESTIK"):
+      workspec.setValue("alnvalue",anVlan);
+    if(assetattrid=="AN_CVLAN_DOMESTIK"):
+      workspec.setValue("alnvalue",anCVlan);
+    if(assetattrid=="AN_SVLAN_DOMESTIK"):
+      workspec.setValue("alnvalue",anSVlan);
+    workspec=workspecSet.moveNext();
+  workspecSet.save();
+  workspecSet.close();
+
+if (peVlan=="None" or meVlan=="None"):
+  try:
+      messageData=generateMessageDataRequest();
+      setupSSLFactory();
+      urlConn=URL(getUrl());
+      conn = urlConn.openConnection();
+      conn.setRequestMethod("POST");
+      conn.setRequestProperty("Accept", "application/json");
+      conn.setRequestProperty("Content-Type", "application/json");
+      conn.setDoOutput(True);
+      os=conn.getOutputStream();
+      os.write(messageData);
+      os.flush();
+      if (conn.getResponseCode() != 200):
+          er = BufferedReader(InputStreamReader((conn.getErrorStream())));
+          insertIntegrationHistory(wonum,"SETVLAN",str(messageData),str(er.readLine()))
+          result=("Generate VLAN Failed\n"+str(er.readLine())+"\n");
+      elif (conn.getResponseCode() == 200):
+          br = BufferedReader(InputStreamReader((conn.getInputStream())));
+          resultReturn=str(br.readLine());
+          jsonArr=JSONArray.parse(resultReturn);
+          parseDataVLAN(jsonArr);
+          setVLANAttribute(wonum);
+          insertIntegrationHistory(wonum,"SETVLAN",str(messageData),str(resultReturn))
+          result=("Generate VLAN Success.\n"+"Refresh/Reopen the order to view the VLAN Detail.\n"+resultVlanReservation);
+      conn.disconnect();
+      if (serviceType=="VPN" and serviceTypePackage=="VPN IP Business") or (serviceType=="ASTINET" and package=="ASTINet Beda Bandwidth"):
+        resultVlanReservation="";
+        messageData=generateMessageDataRequest();
+        setupSSLFactory();
+        urlConn=URL(getUrl());
+        conn = urlConn.openConnection();
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Accept", "application/json");
+        conn.setRequestProperty("Content-Type", "application/json");
+        conn.setDoOutput(True);
+        os=conn.getOutputStream();
+        os.write(messageData);
+        os.flush();
+        if (conn.getResponseCode() != 200):
+            er = BufferedReader(InputStreamReader((conn.getErrorStream())));
+            insertIntegrationHistory(wonum,"SETVLAN",str(messageData),str(er.readLine()))
+            result=("Generate Second VLAN Failed\n"+str(er.readLine()));
+        elif (conn.getResponseCode() == 200):
+            br = BufferedReader(InputStreamReader((conn.getInputStream())));
+            resultReturn=str(br.readLine());
+            jsonArr=JSONArray.parse(resultReturn);
+            parseDataVLAN(jsonArr);
+            insertIntegrationHistory(wonum,"SETVLAN",str(messageData),str(resultReturn))
+            if (serviceType=="VPN" and serviceTypePackage=="VPN IP Business"):
+              setSecondVLANVPNAttribute(wonum);
+            elif(serviceType=="ASTINET" and package=="ASTINET Beda Bandwidth"):
+              setSecondVLANAstinetAttribute(wonum);
+            result=result+("Generate Second VLAN Success.\n"+"Refresh/Reopen the order to view the VLAN Detail.\n"+resultVlanReservation);
+        conn.disconnect();
+      displayMsg(result);
+  except Exception, e:
+      #displayMsg("Generate VLAN Failed. General Failure.\n"+str(e));
+      displayMsg("Generate VLAN Failed. General Failure.\n"+str(e));
+else:
+  try:
+    setupSSLFactory()
+    urlConn=URL(getUrlUn(reservationId))
+    conn = urlConn.openConnection();
+    conn.setRequestMethod("DELETE");
+    conn.setRequestProperty("Accept", "application/json");
+    if (conn.getResponseCode() != 200):
+       er = BufferedReader(InputStreamReader((conn.getErrorStream())));
+       insertIntegrationHistory(wonum,"UnSetVLAN",reservationId,str(er.readLine()))
+       displayMsg("UnReserve VLAN Failed"+"\n"+str(er.readLine())+"\ncurl: "+str(urlConn));
+    elif (conn.getResponseCode() == 200):
+       br = BufferedReader(InputStreamReader((conn.getInputStream())));
+       resultReturn=str(br.readLine());
+       unsetVLANAttribute(wonum);
+       insertIntegrationHistory(wonum,"UnSetVLAN",reservationId,str(resultReturn))
+       result="UnReserve VLAN Success. Refresh/Reopen order to view the VLAN detail.";
+       displayMsg(result);
+    conn.disconnect();
+  except Exception, e:
+    displayMsg("Reservation Id Not Found\n"+str(e));
+    print ("Reservation Id Not Found");

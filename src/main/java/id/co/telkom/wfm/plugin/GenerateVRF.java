@@ -65,36 +65,9 @@ public class GenerateVRF extends Element implements PluginWebSupport {
         if ("POST".equals(hsr.getMethod())) {
 
             try {
-                //@Parsing message
-                //HttpServletRequest get JSON Post data
-                StringBuffer jb = new StringBuffer();
-                String line = null;
-                try {//read the response JSON to string buffer
-                    BufferedReader reader = hsr.getReader();
-                    while ((line = reader.readLine()) != null) {
-                        jb.append(line);
-                    }
-                } catch (Exception e) {
-                    LogUtil.error(getClassName(), e, "Trace error here: " + e.getMessage());
-                }
-                LogUtil.info(getClassName(), "Request Body: " + jb.toString());
-
-//                ListAttributes attribute = new ListAttributes();
-                //Parse JSON String to JSON Object
-                String bodyParam = jb.toString(); //String
-                JSONParser parser = new JSONParser();
-                JSONObject data_obj = (JSONObject) parser.parse(bodyParam);
-                String wonum = data_obj.get("wonum").toString();
-                String vrfName = data_obj.get("vrfName").toString();
-                String serviceType = data_obj.get("serviceType").toString();
-                String owner = data_obj.get("owner").toString();
-                String topology = data_obj.get("topology").toString();
-                String maxRoutes = data_obj.get("maxRoutes").toString();
-
                 GenerateVRFDao dao = new GenerateVRFDao();
-
-
-                String msg = dao.callGenerateVRF(wonum, vrfName, serviceType, owner, topology, maxRoutes);
+                String wonum = hsr.getParameter("wonum");
+                String msg = dao.callGenerateVRF(wonum);
                 JSONObject res = new JSONObject();
                 res.put("code", 200);
                 res.put("message", msg);
