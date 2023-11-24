@@ -250,6 +250,9 @@ public class GenerateVRFDao {
                     updateWOSpec(wonum,reservedRD, "RD");
                     updateWOSpec(wonum,configVRFPE, "CONFIG_VRF_PE");
 
+                    String asn_number = reservedRD!=""? reservedRD.split(":")[0]:"";
+                    updateWOSpec(wonum,asn_number, "ASN_NUMBER");
+
                     msg = "Generate VRF Success.\nRD: "+reservedRD+"\nRT Export: "+rtExport.toString()+"\nRT Import: "+rtImport.toString()+"\nCONFIG_VRF_PE: "+configVRFPE+"\nRefresh/Reopen the order to view the RT Export/ RT Export Detail"+"\nResult Associate VRF: "+resultAssociateVRF;
 
                 }
