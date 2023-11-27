@@ -148,7 +148,7 @@ public class GenerateVRFDao {
                 con.setDoOutput(true);
 
                 try(OutputStream os = con.getOutputStream()) {
-                    byte[] input = createRequest(vrfName, "owner", topology, maxRoutes).getBytes("utf-8");
+                    byte[] input = createRequest(vrfName, owner, topology, maxRoutes).getBytes("utf-8");
                     os.write(input, 0, input.length);
                 }
                 int responseCode = con.getResponseCode();
@@ -254,7 +254,17 @@ public class GenerateVRFDao {
                     updateWOSpec(wonum,asn_number, "ASN_NUMBER");
 
                     msg = "Generate VRF Success.\nRD: "+reservedRD+"\nRT Export: "+rtExport.toString()+"\nRT Import: "+rtImport.toString()+"\nCONFIG_VRF_PE: "+configVRFPE+"\nRefresh/Reopen the order to view the RT Export/ RT Export Detail"+"\nResult Associate VRF: "+resultAssociateVRF;
-
+                }else{
+                    StringBuilder responseAssociateVRF;
+                    try(BufferedReader br = new BufferedReader(
+                            new InputStreamReader(con.getErrorStream(), "utf-8"))) {
+                        responseAssociateVRF = new StringBuilder();
+                        String responseLine = null;
+                        while ((responseLine = br.readLine()) != null) {
+                            responseAssociateVRF.append(responseLine.trim());
+                        }
+                    }
+                    msg = "Error: "+responseAssociateVRF.toString();
                 }
 
             }
