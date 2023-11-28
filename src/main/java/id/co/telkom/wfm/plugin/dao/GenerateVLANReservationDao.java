@@ -230,11 +230,7 @@ public class GenerateVLANReservationDao {
     public String createRequestReservationWithVCID(JSONArray deviceAndPorts, String reservationId, String serviceType, String sto) {
         String value = "";
         try {
-            JSONArray jar = new JSONArray();
-            JSONObject resultObj = new JSONObject();
-            resultObj.put("deviceName", "ME-A-JWB-GGK");
-            resultObj.put("portName", "2/2/11");
-            jar.put(resultObj);
+
 
             JSONObject req = new JSONObject();
             req.put("deviceAndPorts", deviceAndPorts);
@@ -244,6 +240,13 @@ public class GenerateVLANReservationDao {
             req.put("sto", sto);
 
 //            Hardcode
+
+//            JSONArray jar = new JSONArray();
+//            JSONObject resultObj = new JSONObject();
+//            resultObj.put("deviceName", "ME-A-JWB-GGK");
+//            resultObj.put("portName", "2/2/11");
+//            jar.put(resultObj);
+
 //            req.put("deviceAndPorts", jar);
 //            req.put("reservationId", "1-1975255091_2-VIUFJO_2-VLBE7Qb");
 //            req.put("vlanQuantity", 1);
