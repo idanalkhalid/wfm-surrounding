@@ -486,10 +486,7 @@ public class GenerateVLANReservationDao {
                 }
                 int responseCode = con.getResponseCode();
                 LogUtil.info(this.getClass().getName(), "\nresponseCode status : " + responseCode);
-                if (responseCode == 400) {
-                    LogUtil.info(this.getClass().getName(), "STO not found");
-                    msg = "UnReserve VLAN Failed";
-                } else if (responseCode == 200) {
+                if (responseCode == 200) {
                     StringBuilder response;
                     try (BufferedReader br = new BufferedReader(
                             new InputStreamReader(con.getInputStream(), "utf-8"))) {
@@ -524,7 +521,19 @@ public class GenerateVLANReservationDao {
                     updateVLANAttribute(wonum, "AN_SUBINTERFACE", devicePortAN+"."+anVlan,"");
 
                     msg = ("Generate VLAN Success.\n" + "Refresh/Reopen the order to view the VLAN Detail.\n" + resultVlanReservation);
+                }else{
+                    StringBuilder responseError;
+                    try(BufferedReader br = new BufferedReader(
+                            new InputStreamReader(con.getErrorStream(), "utf-8"))) {
+                        responseError = new StringBuilder();
+                        String responseLine = null;
+                        while ((responseLine = br.readLine()) != null) {
+                            responseError.append(responseLine.trim());
+                        }
+                    }
+                    msg = responseError.toString();
                 }
+
                 if(serviceType!="" || serviceTypePackage!="") {
                     if ((serviceType.equalsIgnoreCase("VPN") && serviceTypePackage.equalsIgnoreCase("VPN IP Business")) || (serviceType.equalsIgnoreCase("ASTINET") && packageName.equalsIgnoreCase("ASTINet Beda Bandwidth"))) {
 
@@ -546,16 +555,24 @@ public class GenerateVLANReservationDao {
                         }
                         int responseCode2 = con.getResponseCode();
                         LogUtil.info(this.getClass().getName(), "\nresponseCode status 2: " + responseCode2);
-                        if (responseCode2 == 400) {
-                            LogUtil.info(this.getClass().getName(), "STO not found");
-                            msg = "UnReserve Second VLAN Failed";
-                        } else if (responseCode2 == 200) {
+                        if (responseCode2 == 200) {
                             if (serviceType.equalsIgnoreCase("VPN") && serviceTypePackage.equalsIgnoreCase("VPN IP Business")) {
                                 setSecondVLANVPNAttribute(wonum);
                             } else if (serviceType.equalsIgnoreCase("ASTINET") && packageName.equalsIgnoreCase("ASTINET Beda Bandwidth")) {
                                 setSecondVLANAstinetAttribute(wonum);
                             }
                             msg = msg + ("Generate Second VLAN Success.\n" + "Refresh/Reopen the order to view the VLAN Detail.\n" + resultVlanReservation);
+                        }else{
+                            StringBuilder responseError;
+                            try(BufferedReader br = new BufferedReader(
+                                    new InputStreamReader(con.getErrorStream(), "utf-8"))) {
+                                responseError = new StringBuilder();
+                                String responseLine = null;
+                                while ((responseLine = br.readLine()) != null) {
+                                    responseError.append(responseLine.trim());
+                                }
+                            }
+                            msg = responseError.toString();
                         }
                     }
                 }
@@ -583,10 +600,7 @@ public class GenerateVLANReservationDao {
                 int responseCode = con.getResponseCode();
                 LogUtil.info(this.getClass().getName(), "\nresponseCode status : " + responseCode);
 
-                if (responseCode == 400) {
-                    LogUtil.info(this.getClass().getName(), "STO not found");
-                    msg = "UnReserve VLAN Failed";
-                } else if (responseCode == 200) {
+                if (responseCode == 200) {
                     updateVLANAttribute(wonum, "PE_VLAN", "None","");
                     updateVLANAttribute(wonum, "PE_CVLAN", "None","");
                     updateVLANAttribute(wonum, "PE_SVLAN", "None","");
@@ -606,6 +620,17 @@ public class GenerateVLANReservationDao {
                     updateVLANAttribute(wonum, "ME_SUBINTERFACE", "None","");
                     updateVLANAttribute(wonum, "AN_SUBINTERFACE", "None","");
                     msg = "UnReserve VLAN Success. Refresh/Reopen order to view the VLAN detail.";
+                }else{
+                    StringBuilder responseError;
+                    try(BufferedReader br = new BufferedReader(
+                            new InputStreamReader(con.getErrorStream(), "utf-8"))) {
+                        responseError = new StringBuilder();
+                        String responseLine = null;
+                        while ((responseLine = br.readLine()) != null) {
+                            responseError.append(responseLine.trim());
+                        }
+                    }
+                    msg = responseError.toString();
                 }
             }
 
