@@ -15,6 +15,10 @@ import org.json.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.SQLException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
@@ -30,51 +34,42 @@ public class GenerateStpNetLocDao {
     ValidateTaskAttribute functionAttribute = new ValidateTaskAttribute();
 
     /* Call API Surrounding Generate STP Net Loc */
-    public String callGenerateStpNetLoc(final String wonum, final ListGenerateAttributes listGenerate) throws JSONException, IOException, MalformedURLException, Exception, Throwable {
+    public void callGenerateStpNetLoc(final String wonum, final ListGenerateAttributes listGenerate) throws JSONException, IOException, MalformedURLException, Exception, Throwable {
         apiConfig = connUtil.getApiParam("uim_dev");
+        try {
+            JSONObject assetattr = functionAttribute.getValueAttribute(wonum, "c_assetattrid IN ('LATITUDE', 'LONGITUDE')");
+            String latitude = assetattr.optString("LATITUDE", null);
+            String longitude = assetattr.optString("LONGITUDE", null);
+            // request
+            String request = createRequest(latitude, longitude);
+            // call UIM
+            JSONObject temp = callUIM.callUIM(request, "uim_dev");
+            // Parsing response
+            ObjectMapper objectMapper = new ObjectMapper();
+            final JsonNode rootNode = objectMapper.readTree(temp.toString());
+            // Mendapatkan statusCode
+            final int statusCode = rootNode
+                    .path("env:Envelope")
+                    .path("env:Body")
+                    .path("ent:findDeviceByCriteriaResponse")
+                    .path("statusCode").asInt();
 
-        Thread thread = new Thread(new Runnable() {
-            @Override
+            LogUtil.info(getClass().getName(), "Status Code : " + statusCode);
+            listGenerate.setStatusCode(statusCode);
 
-            public void run() {
-                try {
-                    JSONObject assetattr = functionAttribute.getValueAttribute(wonum, "c_assetattrid IN ('LATITUDE', 'LONGITUDE')");
-                    String latitude = assetattr.optString("LATITUDE", null);
-                    String longitude = assetattr.optString("LONGITUDE", null);
-                    // request
-                    String request = createRequest(latitude, longitude);
-                    // call UIM
-                    JSONObject temp = callUIM.callUIM(request, "uim_dev");
-                    // Parsing response
-                    ObjectMapper objectMapper = new ObjectMapper();
-                    final JsonNode rootNode = objectMapper.readTree(temp.toString());
-                    // Mendapatkan statusCode
-                    final int statusCode = rootNode
-                            .path("env:Envelope")
-                            .path("env:Body")
-                            .path("ent:findDeviceByCriteriaResponse")
-                            .path("statusCode").asInt();
-
-                    LogUtil.info(getClass().getName(), "Status Code : " + statusCode);
-                    listGenerate.setStatusCode(statusCode);
-                    
-                    if (statusCode == 4001) {
-                        LogUtil.info(this.getClass().getName(), "No Device found.");
-                        handleNoDeviceFound(wonum);
-                    } else if (statusCode == 4000) {
-                        handleDeviceFound(wonum, rootNode);
-                    }
-                } catch (Exception e) {
-                    LogUtil.error(this.getClass().getName(), e, "error : " + e.getMessage());
-                    Thread.currentThread().interrupt();
-                } catch (Throwable ex) {
-                    LogUtil.error(this.getClass().getName(), ex, "error : " + ex.getMessage());
-                }
+            if (statusCode == 4001) {
+                LogUtil.info(this.getClass().getName(), "No Device found.");
+                handleNoDeviceFound(wonum);
+            } else if (statusCode == 4000) {
+                externalUpdateThread(wonum, rootNode);
+//                handleDeviceFound(wonum, rootNode);
             }
-        });
-        thread.setDaemon(true);
-        thread.start();
-        return null;
+        } catch (Exception e) {
+            LogUtil.error(this.getClass().getName(), e, "error : " + e.getMessage());
+            Thread.currentThread().interrupt();
+        } catch (Throwable ex) {
+            LogUtil.error(this.getClass().getName(), ex, "error : " + ex.getMessage());
+        }
     }
 
     private String handleNoDeviceFound(String wonum) throws SQLException, Throwable {
@@ -137,6 +132,20 @@ public class GenerateStpNetLocDao {
             functionAttribute.insertToDeviceTable(wonum, "STP_PORT_NAME", networkLocation, portName);
             functionAttribute.insertToDeviceTable(wonum, "STP_PORT_ID", portName, portId);
         }
+    }
+
+    private void externalUpdateThread(String wonum, JsonNode rootNode) {
+        ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(1);
+        executor.submit(() -> {
+            try {
+                handleDeviceFound(wonum, rootNode);
+            } catch (Exception ex) {
+                LogUtil.error(getClass().getName(), ex, ex.getMessage());
+            } catch (Throwable ex) {
+                Logger.getLogger(GenerateStpNetLocDao.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        });
+
     }
 
     private String createRequest(String latitude, String longitude) {
