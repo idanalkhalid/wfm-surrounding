@@ -30,141 +30,65 @@ public class GenerateStpNetLocDao {
     ValidateTaskAttribute functionAttribute = new ValidateTaskAttribute();
 
     /* Call API Surrounding Generate STP Net Loc */
-    public String callGenerateStpNetLoc(String wonum, ListGenerateAttributes listGenerate) throws JSONException, IOException, MalformedURLException, Exception, Throwable {
+    public String callGenerateStpNetLoc(final String wonum, final ListGenerateAttributes listGenerate) throws JSONException, IOException, MalformedURLException, Exception, Throwable {
         apiConfig = connUtil.getApiParam("uim_dev");
-        String msg = "";
-        try {
-            JSONObject assetattr = functionAttribute.getValueAttribute(wonum, "c_assetattrid IN ('LATITUDE', 'LONGITUDE')");
-            String latitude = assetattr.optString("LATITUDE", null);
-            String longitude = assetattr.optString("LONGITUDE", null);
 
-            // request
-            String request = createRequest(latitude, longitude);
+        Thread thread = new Thread(new Runnable() {
+            @Override
 
-            // call UIM
-            JSONObject temp = callUIM.callUIM(request, "uim_dev");
+            public void run() {
+                try {
+                    JSONObject assetattr = functionAttribute.getValueAttribute(wonum, "c_assetattrid IN ('LATITUDE', 'LONGITUDE')");
+                    String latitude = assetattr.optString("LATITUDE", null);
+                    String longitude = assetattr.optString("LONGITUDE", null);
+                    // request
+                    String request = createRequest(latitude, longitude);
+                    // call UIM
+                    JSONObject temp = callUIM.callUIM(request, "uim_dev");
+                    // Parsing response
+                    ObjectMapper objectMapper = new ObjectMapper();
+                    final JsonNode rootNode = objectMapper.readTree(temp.toString());
+                    // Mendapatkan statusCode
+                    final int statusCode = rootNode
+                            .path("env:Envelope")
+                            .path("env:Body")
+                            .path("ent:findDeviceByCriteriaResponse")
+                            .path("statusCode").asInt();
 
-            // Parsing response
-            ObjectMapper objectMapper = new ObjectMapper();
-            JsonNode rootNode = objectMapper.readTree(temp.toString());
-
-            // Mendapatkan statusCode
-            int statusCode = rootNode
-                    .path("env:Envelope")
-                    .path("env:Body")
-                    .path("ent:findDeviceByCriteriaResponse")
-                    .path("statusCode").asInt();
-
-            listGenerate.setStatusCode(statusCode);
-
-            if (statusCode == 4001) {
-                LogUtil.info(this.getClass().getName(), "No Device found.");
-                handleNoDeviceFound(wonum);
-            } else if (statusCode == 4000) {
-                handleDeviceFound(wonum, rootNode);
+                    LogUtil.info(getClass().getName(), "Status Code : " + statusCode);
+                    listGenerate.setStatusCode(statusCode);
+                    
+                    if (statusCode == 4001) {
+                        LogUtil.info(this.getClass().getName(), "No Device found.");
+                        handleNoDeviceFound(wonum);
+                    } else if (statusCode == 4000) {
+                        handleDeviceFound(wonum, rootNode);
+                    }
+                } catch (Exception e) {
+                    LogUtil.error(this.getClass().getName(), e, "error : " + e.getMessage());
+                    Thread.currentThread().interrupt();
+                } catch (Throwable ex) {
+                    LogUtil.error(this.getClass().getName(), ex, "error : " + ex.getMessage());
+                }
             }
-        } catch (Exception e) {
-            // Handle exception
-            e.printStackTrace();
-        }
-
-//        try {
-//            JSONObject assetattr = functionAttribute.getValueAttribute(wonum, "c_assetattrid IN ('LATITUDE', 'LONGITUDE')");
-//            String latitude = assetattr.optString("LATITUDE", null);
-//            String longitude = assetattr.optString("LONGITUDE", null);
-//            // request
-//            String request = createRequest(latitude, longitude);
-//            // call UIM
-//            JSONObject temp = callUIM.callUIM(request, "uim_dev");
-//
-//            ObjectMapper objectMapper = new ObjectMapper();
-//            JsonNode rootNode = objectMapper.readTree(temp.toString());
-//            // Mendapatkan elemen "DeviceInfo"
-//
-//            JsonNode statusCodeStr = rootNode
-//                    .path("env:Envelope")
-//                    .path("env:Body")
-//                    .path("ent:findDeviceByCriteriaResponse");
-//            int statusCode = Integer.parseInt(statusCodeStr.path("statusCode").asText());
-//            String status = statusCodeStr.path("status").asText();
-//            listGenerate.setStatusCode(statusCode);
-//
-//            JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "GenerateSTPNetLocUIM", apiConfig.getUrl(), status, request, temp.toString());
-//            String kafkaRes = formatResponse.toString();
-//            responseKafka.IntegrationHistory(kafkaRes);
-//            LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
-//
-//            if (statusCode == 4001) {
-//                LogUtil.info(this.getClass().getName(), "No Device found.");
-//                functionAttribute.deleteTkDeviceattribute(wonum);
-//                functionAttribute.insertToDeviceTable(wonum, "STP_NETWORKLOCATION", "", "None");
-//                functionAttribute.insertToDeviceTable(wonum, "STP_NAME", "", "None");
-//                functionAttribute.insertToDeviceTable(wonum, "STP_SPECIFICATION", "", "None");
-//                functionAttribute.insertToDeviceTable(wonum, "STP_ID", "", "None");
-//                msg = "Device : " + "None";
-//            } else if (statusCode == 4000) {
-//                JsonNode deviceInfoArray = rootNode
-//                        .path("env:Envelope")
-//                        .path("env:Body")
-//                        .path("ent:findDeviceByCriteriaResponse")
-//                        .path("DeviceInfo");
-//                functionAttribute.deleteTkDeviceattribute(wonum);
-//                for (JsonNode deviceInfoNode : deviceInfoArray) {
-//                    // Clear data
-//                    // Mendapatkan data umum DeviceInfo
-//                    String name = deviceInfoNode.path("name").asText();
-//                    String type = deviceInfoNode.path("type").asText();
-//                    String networkLocation = deviceInfoNode.path("networkLocation").asText();
-//                    String id = deviceInfoNode.path("id").asText();
-//                    String specification = deviceInfoNode.path("specification").asText();
-//                    msg = "<br> Name : " + name + " <br>"
-//                            + "Specification : " + specification + "<br>"
-//                            + "ID : " + id + "<br>"
-//                            + "NetworkLocation : " + networkLocation + "<br>";
-//
-//                    functionAttribute.insertToDeviceTable(wonum, "STP_NETWORKLOCATION", "", networkLocation);
-//                    functionAttribute.insertToDeviceTable(wonum, "STP_NAME", networkLocation, name);
-//                    functionAttribute.insertToDeviceTable(wonum, "STP_SPECIFICATION", networkLocation, specification);
-//                    functionAttribute.insertToDeviceTable(wonum, "STP_ID", networkLocation, id);
-//
-//                    LogUtil.info(getClass().getName(), "Device Name : " + name);
-//                    LogUtil.info(getClass().getName(), "Device Type : " + type);
-//                    LogUtil.info(getClass().getName(), "Device Location : " + networkLocation);
-//                    LogUtil.info(getClass().getName(), "Device Specification : " + specification);
-//                    LogUtil.info(getClass().getName(), "Device ID : " + id);
-//
-//                    // Mendapatkan elemen "ports"
-//                    JsonNode portsArray = deviceInfoNode.path("ports");
-//
-//                    if (!portsArray.isMissingNode()) {
-//                        for (JsonNode portNode : portsArray) {
-//                            // Mendapatkan data Port
-//                            String portName = portNode.path("name").asText();
-//                            String portId = portNode.path("id").asText();
-//                            LogUtil.info(getClass().getName(), "Port Name : " + portName);
-//                            LogUtil.info(getClass().getName(), "Port ID : " + portId);
-//                            functionAttribute.insertToDeviceTable(wonum, "STP_PORT_NAME", networkLocation, portName);
-//                            functionAttribute.insertToDeviceTable(wonum, "STP_PORT_ID", portName, portId);
-//                        }
-//                    }
-//                    System.out.println(); // Pemisah antara setiap DeviceInfo
-//                }
-//            }
-//        } catch (Exception e) {
-//            LogUtil.error(getClass().getName(), e, "Call Failed." + e);
-//        }
-        return msg;
+        });
+        thread.setDaemon(true);
+        thread.start();
+        return null;
     }
 
-    private void handleNoDeviceFound(String wonum) throws SQLException, Throwable {
+    private String handleNoDeviceFound(String wonum) throws SQLException, Throwable {
         functionAttribute.deleteTkDeviceattribute(wonum);
         functionAttribute.insertToDeviceTable(wonum, "STP_NETWORKLOCATION", "", "None");
         functionAttribute.insertToDeviceTable(wonum, "STP_NAME", "", "None");
         functionAttribute.insertToDeviceTable(wonum, "STP_SPECIFICATION", "", "None");
         functionAttribute.insertToDeviceTable(wonum, "STP_ID", "", "None");
+
+        String msg = "Device not found!";
+        return msg;
     }
 
-    private void handleDeviceFound(String wonum, JsonNode rootNode) throws SQLException, Throwable {
+    private String handleDeviceFound(String wonum, JsonNode rootNode) throws SQLException, Throwable {
         JsonNode deviceInfoArray = rootNode
                 .path("env:Envelope")
                 .path("env:Body")
@@ -176,12 +100,14 @@ public class GenerateStpNetLocDao {
         for (JsonNode deviceInfoNode : deviceInfoArray) {
             handleDeviceInfoNode(wonum, deviceInfoNode);
         }
+        String msg = "Device found!";
+        return msg;
     }
 
     private void handleDeviceInfoNode(String wonum, JsonNode deviceInfoNode) throws Throwable {
         // Mendapatkan data umum DeviceInfo
         String name = deviceInfoNode.path("name").asText();
-        String type = deviceInfoNode.path("type").asText();
+//        String type = deviceInfoNode.path("type").asText();
         String networkLocation = deviceInfoNode.path("networkLocation").asText();
         String id = deviceInfoNode.path("id").asText();
         String specification = deviceInfoNode.path("specification").asText();
@@ -192,12 +118,6 @@ public class GenerateStpNetLocDao {
         functionAttribute.insertToDeviceTable(wonum, "STP_SPECIFICATION", networkLocation, specification);
         functionAttribute.insertToDeviceTable(wonum, "STP_ID", networkLocation, id);
 
-        LogUtil.info(getClass().getName(), "Device Name : " + name);
-        LogUtil.info(getClass().getName(), "Device Type : " + type);
-        LogUtil.info(getClass().getName(), "Device Location : " + networkLocation);
-        LogUtil.info(getClass().getName(), "Device Specification : " + specification);
-        LogUtil.info(getClass().getName(), "Device ID : " + id);
-
         // Mendapatkan elemen "ports"
         JsonNode portsArray = deviceInfoNode.path("ports");
 
@@ -205,7 +125,7 @@ public class GenerateStpNetLocDao {
             handlePortsArray(wonum, networkLocation, portsArray);
         }
 
-        System.out.println(); // Pemisah antara setiap DeviceInfo
+        System.out.println();
     }
 
     private void handlePortsArray(String wonum, String networkLocation, JsonNode portsArray) throws Throwable {
@@ -213,9 +133,6 @@ public class GenerateStpNetLocDao {
             // Mendapatkan data Port
             String portName = portNode.path("name").asText();
             String portId = portNode.path("id").asText();
-
-            LogUtil.info(getClass().getName(), "Port Name : " + portName);
-            LogUtil.info(getClass().getName(), "Port ID : " + portId);
 
             functionAttribute.insertToDeviceTable(wonum, "STP_PORT_NAME", networkLocation, portName);
             functionAttribute.insertToDeviceTable(wonum, "STP_PORT_ID", portName, portId);

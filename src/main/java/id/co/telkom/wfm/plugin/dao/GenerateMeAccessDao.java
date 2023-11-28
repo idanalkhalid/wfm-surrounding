@@ -32,7 +32,6 @@ public class GenerateMeAccessDao {
         String message = "";
 
         JSONObject assetAttributes = validateAttribute.getValueAttribute(wonum, "c_assetattrid IN ('AN_NAME', 'AN_UPLINK_PORTNAME', 'DEVICELINK', 'LINK_TYPE', 'ME_IPADDRESS', 'ME_NAME', 'NTE_TYPE')");
-        ConnUtil util = new ConnUtil();
 
         String deviceName = assetAttributes.optString("AN_NAME", "null").replace("/", "%2F").replace(" ", "%20");
         String portname = assetAttributes.optString("AN_UPLINK_PORTNAME", "null").replace("/", "%2F").replace(" ", "%20");

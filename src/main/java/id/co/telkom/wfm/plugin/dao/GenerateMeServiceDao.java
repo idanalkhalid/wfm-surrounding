@@ -11,9 +11,6 @@ import id.co.telkom.wfm.plugin.model.*;
 import id.co.telkom.wfm.plugin.util.*;
 import java.io.*;
 import java.net.*;
-import java.sql.*;
-import javax.sql.DataSource;
-import org.joget.apps.app.service.AppUtil;
 import org.joget.commons.util.LogUtil;
 import org.json.*;
 
