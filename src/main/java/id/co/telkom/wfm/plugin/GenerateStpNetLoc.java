@@ -75,7 +75,7 @@ public class GenerateStpNetLoc extends Element implements PluginWebSupport {
     public void webService(HttpServletRequest hsr, HttpServletResponse hsr1) throws ServletException, IOException, MalformedURLException {
         GenerateStpNetLocDao dao = new GenerateStpNetLocDao();
         ResponseAPI responseTemplete = new ResponseAPI();
-
+        ListGenerateAttributes listAttribute = new ListGenerateAttributes();
         //@@Start..
         LogUtil.info(this.getClass().getName(), "############## START PROCESS GENERATE STP NETWORK LOCATION ###############");
 
@@ -105,24 +105,25 @@ public class GenerateStpNetLoc extends Element implements PluginWebSupport {
 
                 try {
                     LogUtil.info(getClassName(), "Call Generate STP Net Loc");
+                    LogUtil.info(getClassName(), "Status Code : " + listAttribute.getStatusCode());
                     JSONObject res = new JSONObject();
-                    ListGenerateAttributes listAttribute = new ListGenerateAttributes();
-                    String generateStpNetLoc = dao.callGenerateStpNetLoc(wonum, listAttribute);
 
+                    dao.callGenerateStpNetLoc(wonum, listAttribute);
+                    
                     if (listAttribute.getStatusCode() == 4001) {
                         res.put("code", 422);
                         res.put("message", "Device Not Found!");
-                        res.put("data", generateStpNetLoc);
                         res.writeJSONString(hsr1.getWriter());
                     } else if (listAttribute.getStatusCode() == 4000) {
                         res.put("code", 200);
-                        res.put("message", "Device Found " + generateStpNetLoc);
+                        res.put("message", "Device Found");
                         res.writeJSONString(hsr1.getWriter());
                     } else {
                         String message = "Call Failed";
                         res = responseTemplete.getResponse(message, 404);
                         res.writeJSONString(hsr1.getWriter());
                     }
+                    
                 } catch (Exception ex) {
                     Logger.getLogger(GenerateStpNetLoc.class.getName()).log(Level.SEVERE, null, ex);
                 } catch (Throwable ex) {

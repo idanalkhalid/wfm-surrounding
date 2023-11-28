@@ -56,7 +56,7 @@ public class CallUIM {
         StringBuilder result = response;
         org.json.JSONObject temp = XML.toJSONObject(result.toString());
         LogUtil.info(this.getClass().getName(), "INI REQUEST XML : " + request);
-        LogUtil.info(this.getClass().getName(), "INI RESPONSE : " + temp.toString());
+//        LogUtil.info(this.getClass().getName(), "INI RESPONSE : " + temp.toString());
 
         return temp;
     }

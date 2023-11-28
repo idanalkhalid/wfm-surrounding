@@ -13,8 +13,6 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.sql.*;
 import java.util.logging.*;
-import javax.sql.DataSource;
-import org.joget.apps.app.service.AppUtil;
 import org.joget.commons.util.*;
 import org.json.*;
 
@@ -27,90 +25,17 @@ public class GenerateDownlinkPortDao {
     TimeUtil time = new TimeUtil();
     FormatLogIntegrationHistory insertIntegrationHistory = new FormatLogIntegrationHistory();
     ResponseKafka responseKafka = new ResponseKafka();
-    // Get URL
     ConnUtil connUtil = new ConnUtil();
     APIConfig apiConfig = new APIConfig();
-
-    public JSONObject getAssetattrid(String wonum) throws SQLException, JSONException {
-        JSONObject resultObj = new JSONObject();
-        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String query = "SELECT c_assetattrid, c_value "
-                + "FROM app_fd_workorderspec "
-                + "WHERE c_wonum = ? "
-                + "AND c_assetattrid IN ("
-                + "'STP_NAME',"
-                + "'STP_PORT_NAME',"
-                + "'STP_PORT_ID', "
-                + "'NTE_NAME', "
-                + "'NTE_DOWNLINK_PORT',"
-                + "'AN_STO')";
-
-        try (Connection con = ds.getConnection();
-                PreparedStatement ps = con.prepareStatement(query)) {
-            ps.setString(1, wonum);
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) {
-                resultObj.put(rs.getString("c_assetattrid"), rs.getString("c_value"));
-            }
-        } catch (SQLException e) {
-            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
-        }
-        return resultObj;
-    }
-
-    public void deleteTkDeviceattribute(String wonum) throws SQLException {
-        DataSource dataSource = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String deleteQuery = "DELETE FROM APP_FD_TK_DEVICEATTRIBUTE WHERE C_REF_NUM = ?";
-
-        try (Connection connection = dataSource.getConnection();
-                PreparedStatement preparedStatement = connection.prepareStatement(deleteQuery)) {
-
-            preparedStatement.setString(1, wonum);
-            int rowsAffected = preparedStatement.executeUpdate();
-
-            if (rowsAffected > 0) {
-                LogUtil.info(getClass().getName(), "Berhasil menghapus data");
-            } else {
-                LogUtil.info(getClass().getName(), "Gagal menghapus data");
-            }
-
-        } catch (SQLException e) {
-            LogUtil.error(getClass().getName(), e, "Trace error here: " + e.getMessage());
-        }
-    }
-
-    public void insertToDeviceTable(String wonum, String name, String type, String description) throws Throwable {
-        // Generate UUID
-        String uuId = UuidGenerator.getInstance().getUuid();
-        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String insert = "INSERT INTO APP_FD_TK_DEVICEATTRIBUTE (ID, C_REF_NUM, C_ATTR_NAME, C_ATTR_TYPE, C_DESCRIPTION) VALUES (?, ?, ?, ?, ?)";
-
-        try (Connection con = ds.getConnection();
-                PreparedStatement ps = con.prepareStatement(insert)) {
-            ps.setString(1, uuId);
-            ps.setString(2, wonum);
-            ps.setString(3, name);
-            ps.setString(4, type);
-            ps.setString(5, description);
-
-            int exe = ps.executeUpdate();
-
-            if (exe > 0) {
-                LogUtil.info(this.getClass().getName(), "Berhasil menambahkan data");
-            }
-        } catch (SQLException e) {
-            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
-        } finally {
-            ds.getConnection().close();
-        }
-    }
+    ValidateTaskAttribute functionAttribute = new ValidateTaskAttribute();
 
     public String formatRequest(String wonum, ListGenerateAttributes listGenerate) throws SQLException, JSONException {
 //        JSONObject result = new JSONObject();
         String result = "";
         try {
 
-            JSONObject assetAttributes = getAssetattrid(wonum);
+//            JSONObject assetAttributes = getAssetattrid(wonum);
+            JSONObject assetAttributes = functionAttribute.getValueAttribute(wonum, "c_assetattrid IN ('STP_NAME','STP_PORT_NAME', 'STP_PORT_ID', 'NTE_NAME', 'NTE_DOWNLINK_PORT', 'AN_STO')");
 
             String nteName = assetAttributes.optString("NTE_NAME");
             String anSto = assetAttributes.optString("AN_STO", "null");
@@ -132,7 +57,7 @@ public class GenerateDownlinkPortDao {
     }
 
     public String callGenerateDownlinkPort(String wonum, String bandwidth, String odpName, String downlinkPortName, String downlinkPortID, String sto, ListGenerateAttributes listGenerate) throws MalformedURLException, IOException, Throwable {
-        JSONObject attribute = new JSONObject();
+        
         String message = "";
         CallUIM callUIM = new CallUIM();
         try {
@@ -160,13 +85,12 @@ public class GenerateDownlinkPortDao {
                 LogUtil.info(this.getClass().getName(), "DownlinkPort Not found!");
                 listGenerate.setStatusCode(statusCode);
                 message = "DownlinkPort Not Found!";
-//                msg.put("message", "DownlinkPort Not Found!");
-                deleteTkDeviceattribute(wonum);
-//                msg.put("Device", "None");
-                insertToDeviceTable(wonum, "AN_DOWNLINK_PORTNAME", "None", "None");
-                insertToDeviceTable(wonum, "AN_DOWNLINK_PORTID", "None", "None");
+                functionAttribute.deleteTkDeviceattribute(wonum);
+                functionAttribute.insertToDeviceTable(wonum, "AN_DOWNLINK_PORTNAME", "None", "None");
+                functionAttribute.insertToDeviceTable(wonum, "AN_DOWNLINK_PORTID", "None", "None");
             } else if (statusCode == 4000) {
                 listGenerate.setStatusCode(statusCode);
+                JSONObject attribute = new JSONObject();
                 JSONObject getDeviceInformation = device.getJSONObject("AccessDeviceInformation");
 
                 String manufacture = getDeviceInformation.getString("Manufacturer");
@@ -178,8 +102,16 @@ public class GenerateDownlinkPortDao {
                 String id = getDeviceInformation.getString("Id");
 
                 // Clear data from table APP_FD_TK_DEVICEATTRIBUTE
-                deleteTkDeviceattribute(wonum);
-                updateAttributeValue(wonum, id, sTO, ipAddress, nmsIpaddress, name, manufacture, model);
+                functionAttribute.deleteTkDeviceattribute(wonum);
+                
+                functionAttribute.updateWO("app_fd_workorderspec", "c_value='"+id+"'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_DEVICE_ID'");
+                functionAttribute.updateWO("app_fd_workorderspec", "c_value='"+sTO+"'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_STO'");
+                functionAttribute.updateWO("app_fd_workorderspec", "c_value='"+ipAddress+"'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_IPADDRESS'");
+                functionAttribute.updateWO("app_fd_workorderspec", "c_value='"+nmsIpaddress+"'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_NMSIPADDRESS'");
+                functionAttribute.updateWO("app_fd_workorderspec", "c_value='"+name+"'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_NAME'");
+                functionAttribute.updateWO("app_fd_workorderspec", "c_value='"+manufacture+"'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_MANUFACTUR'");
+                functionAttribute.updateWO("app_fd_workorderspec", "c_value='"+model+"'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_MODEL'");
+//                updateAttributeValue(wonum, id, sTO, ipAddress, nmsIpaddress, name, manufacture, model);
 
                 Object downlinkPortObj = getDeviceInformation.get("DownlinkPort");
                 if (downlinkPortObj instanceof JSONObject) {
@@ -192,8 +124,8 @@ public class GenerateDownlinkPortDao {
                     attribute.put("Downlink Port Name : ", downlinkportName);
                     attribute.put("Downlink Port ID : ", downlinkPortId);
                     // insert into tk_deviceattribute
-                    insertToDeviceTable(wonum, "AN_DOWNLINK_PORTNAME", downlinkPortName, downlinkportName);
-                    insertToDeviceTable(wonum, "AN_DOWNLINK_PORTID", downlinkportName, downlinkPortId);
+                    functionAttribute.insertToDeviceTable(wonum, "AN_DOWNLINK_PORTNAME", downlinkPortName, downlinkportName);
+                    functionAttribute.insertToDeviceTable(wonum, "AN_DOWNLINK_PORTID", downlinkportName, downlinkPortId);
                 } else if (downlinkPortObj instanceof JSONArray) {
                     JSONArray downlinkPortArray = (JSONArray) downlinkPortObj;
                     for (int i = 0; i < downlinkPortArray.length(); i++) {
@@ -201,12 +133,12 @@ public class GenerateDownlinkPortDao {
 
                         String downlinkportName = hasil.getString("name");
                         String downlinkPortId = hasil.getString("id");
-                        
+
                         attribute.put("Downlink Port Name : ", downlinkportName);
                         attribute.put("Downlink Port ID : ", downlinkPortId);
 
-                        insertToDeviceTable(wonum, "AN_DOWNLINK_PORTNAME", downlinkPortName, downlinkportName);
-                        insertToDeviceTable(wonum, "AN_DOWNLINK_PORTID", downlinkportName, downlinkPortId);
+                        functionAttribute.insertToDeviceTable(wonum, "AN_DOWNLINK_PORTNAME", downlinkPortName, downlinkportName);
+                        functionAttribute.insertToDeviceTable(wonum, "AN_DOWNLINK_PORTID", downlinkportName, downlinkPortId);
                     }
                 }
                 message = "Manufactur : " + manufacture + " "
@@ -222,50 +154,6 @@ public class GenerateDownlinkPortDao {
             LogUtil.error(getClass().getName(), e, "Call Failed. No Device Found." + "\n" + e);
         }
         return message;
-    }
-
-    public boolean updateAttributeValue(String wonum, String deviceId, String sto, String ipaddress, String nmsipaddress, String name, String manufactur, String model) {
-        boolean result = false;
-
-        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String updateQuery
-                = "UPDATE APP_FD_WORKORDERSPEC "
-                + "SET c_value = CASE c_assetattrid "
-                + "WHEN 'AN_DEVICE_ID' THEN ? "
-                + "WHEN 'AN_STO' THEN ? "
-                + "WHEN 'AN_IPADDRESS' THEN ? "
-                + "WHEN 'AN_NMSIPADDRESS' THEN ? "
-                + "WHEN 'AN_NAME' THEN ? "
-                + "WHEN 'AN_MANUFACTUR' THEN ? "
-                + "WHEN 'AN_MODEL' THEN ? "
-                + "ELSE 'Missing' END "
-                + "WHERE c_wonum = ? "
-                + "AND c_assetattrid IN ('AN_DEVICE_ID', 'AN_STO', 'AN_IPADDRESS', 'AN_NMSIPADDRESS', 'AN_NAME', 'AN_MANUFACTUR', 'AN_MODEL')";
-
-        try (Connection con = ds.getConnection();
-                PreparedStatement ps = con.prepareStatement(updateQuery)) {
-
-            ps.setString(1, deviceId);
-            ps.setString(2, sto);
-            ps.setString(3, ipaddress);
-            ps.setString(4, nmsipaddress);
-            ps.setString(5, name);
-            ps.setString(6, manufactur);
-            ps.setString(7, model);
-            ps.setString(8, wonum);
-
-            int exe = ps.executeUpdate();
-
-            if (exe > 0) {
-                result = true;
-                LogUtil.info(getClass().getName(), "Downlinkport updated to " + wonum);
-            }
-
-        } catch (SQLException e) {
-            LogUtil.error(getClass().getName(), e, "Trace error here: " + e.getMessage());
-        }
-
-        return result;
     }
 
     private String requestXML(String bandwidth, String odpName, String downlinkPortName, String downlinkPortID, String sto) {

@@ -2,7 +2,7 @@ package id.co.telkom.wfm.plugin.dao;
 
 import id.co.telkom.wfm.plugin.kafka.ResponseKafka;
 import id.co.telkom.wfm.plugin.model.APIConfig;
-import id.co.telkom.wfm.plugin.model.VrfReservation;
+//import id.co.telkom.wfm.plugin.model.VrfReservation;
 import id.co.telkom.wfm.plugin.util.ConnUtil;
 import id.co.telkom.wfm.plugin.util.FormatLogIntegrationHistory;
 import id.co.telkom.wfm.plugin.util.TimeUtil;
