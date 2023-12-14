@@ -6,17 +6,10 @@
 package id.co.telkom.wfm.plugin.util;
 
 import id.co.telkom.wfm.plugin.model.APIConfig;
-import id.co.telkom.wfm.plugin.model.URLManager;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URL;
+import java.io.*;
+import java.net.*;
 import org.joget.commons.util.LogUtil;
-import org.json.JSONException;
-import org.json.JSONObject;
-import org.json.XML;
+import org.json.*;
 
 /**
  *
@@ -56,8 +49,8 @@ public class CallUIM {
         StringBuilder result = response;
         org.json.JSONObject temp = XML.toJSONObject(result.toString());
         LogUtil.info(this.getClass().getName(), "INI REQUEST XML : " + request);
-//        LogUtil.info(this.getClass().getName(), "INI RESPONSE : " + temp.toString());
-
+        LogUtil.info(this.getClass().getName(), "INI RESPONSE : " + temp.toString());
+        
         return temp;
     }
     public JSONObject callEAI(String request) throws MalformedURLException, IOException, JSONException {

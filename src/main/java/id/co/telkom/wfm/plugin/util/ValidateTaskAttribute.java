@@ -120,6 +120,65 @@ public class ValidateTaskAttribute {
         return activity;
     }
 
+    // GET PARAMS FROM TABLE WORKORDER
+    public JSONObject getWOAttribute(String wonum) throws SQLException, JSONException {
+        JSONObject attributes = new JSONObject();
+        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
+        String query = "SELECT wo2.c_wonum, wo2.c_parent, wo1.c_scorderno, wo1.c_productname,wo2.c_detailactcode "
+                + "FROM app_fd_workorder wo1 "
+                + "JOIN app_fd_workorder wo2 ON wo1.c_wonum = wo2.c_parent "
+                + "WHERE wo1.c_woclass = 'WORKORDER' "
+                + "AND wo2.c_wonum = ?";
+        try (Connection con = ds.getConnection();
+                PreparedStatement ps = con.prepareStatement(query)) {
+            ps.setString(1, wonum);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                attributes.put("detailactcode", rs.getString("c_detailactcode"));
+                attributes.put("parent", rs.getString("c_parent"));
+                attributes.put("productname", rs.getString("c_productname"));
+                attributes.put("scorderno", rs.getString("c_scorderno"));
+                LogUtil.info(getClass().getName(), "Activity: " + attributes);
+            }
+        } catch (SQLException e) {
+            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
+        } finally {
+            ds.getConnection().close();
+        }
+        return attributes;
+    }
+
+    // GET ATTRIBUTE VALUE FROM TABLE WORKORDERATTRIBUTE
+    public JSONObject getWorkorderAttribute(String parent) throws JSONException, SQLException {
+        JSONObject resultObj = new JSONObject();
+        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
+        String query = "SELECT C_ATTR_VALUE FROM APP_FD_WORKORDERATTRIBUTE "
+                + "WHERE C_WONUM = ? "
+                + "AND C_ATTR_NAME IN ('Package_Name','Package', 'Package_Exist') "
+                + "AND C_ATTR_VALUE IN ("
+                + "'Standard', "
+                + "'ASTINet Standard', "
+                + "'ASTINet Beda Bandwidth', "
+                + "'ASTINet SME', "
+                + "'ASTINet SME SDWAN', "
+                + "'ASTINet Fit SDWAN', "
+                + "'IP Transit Bedabandwidth', "
+                + "'IP Transit Beda bandwidth')";
+        try (Connection con = ds.getConnection();
+                PreparedStatement ps = con.prepareStatement(query)) {
+            ps.setString(1, parent);
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                resultObj.put("value", "C_ATTR_VALUE");
+            }
+        } catch (SQLException e) {
+            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
+        } finally {
+            ds.getConnection().close();
+        }
+        return resultObj;
+    }
+
     // Delete data TK_DEVICEATTRIBUTE
     public void deleteTkDeviceattribute(String wonum) throws SQLException {
         DataSource dataSource = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
@@ -167,5 +226,72 @@ public class ValidateTaskAttribute {
         } finally {
             ds.getConnection().close();
         }
+    }
+
+    // Update Task Status
+    public String setStatus(String wonum) {
+        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
+
+        String updateQuery = "UPDATE app_fd_workorder "
+                + "SET c_status = 'COMPWA' "
+                + "WHERE c_wonum = ? "
+                + "AND c_woclass = 'ACTIVITY' "
+                + "AND c_status = 'STARTWA'";
+        try (Connection con = ds.getConnection();
+                PreparedStatement ps = con.prepareStatement(updateQuery)) {
+
+            ps.setString(1, wonum);
+            int exe = ps.executeUpdate();
+
+            if (exe > 0) {
+                return "Update task status berhasil";
+            } else {
+                return "Update task gagal";
+            }
+        } catch (Exception e) {
+            return "Error: " + e.getMessage();
+        }
+    }
+
+    public String getWoAttrValue(String parent, String attrName) throws SQLException {
+        String value = "";
+        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
+        String query = "SELECT c_attr_value FROM app_fd_workorderattribute WHERE c_wonum = ? AND c_attr_name = ?";
+        try (Connection con = ds.getConnection();
+                PreparedStatement ps = con.prepareStatement(query)) {
+            ps.setString(1, parent);
+            ps.setString(2, attrName);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                value = rs.getString("c_attr_value");
+            }
+        } catch (SQLException e) {
+            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
+        } finally {
+            ds.getConnection().close();
+        }
+        return value;
+    }
+    
+    public JSONObject getParamWO(String parent) throws SQLException, JSONException {
+        JSONObject attributes = new JSONObject();
+        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
+        String query = "SELECT c_productname, c_crmordertype, c_scorderno FROM app_fd_workorder WHERE c_wonum = ?";
+        try (Connection con = ds.getConnection();
+                PreparedStatement ps = con.prepareStatement(query)) {
+            ps.setString(1, parent);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                attributes.put("productname", rs.getString("c_productname"));
+                attributes.put("crmordertype", rs.getString("c_crmordertype"));
+                attributes.put("scorderno", rs.getString("c_scorderno"));
+                LogUtil.info(getClass().getName(), "Activity: " + attributes);
+            }
+        } catch (SQLException e) {
+            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
+        } finally {
+            ds.getConnection().close();
+        }
+        return attributes;
     }
 }

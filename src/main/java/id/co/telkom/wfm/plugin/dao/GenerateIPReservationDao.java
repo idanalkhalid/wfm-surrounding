@@ -374,7 +374,7 @@ public class GenerateIPReservationDao {
         boolean status = false;
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
 
-        String query = "SELECT * FROM APP_FD_WORKORDERSPEC WHERE C_WONUM=? AND C_ASSETATTRID like (?)";
+        String query = "SELECT c_assetattrid FROM APP_FD_WORKORDERSPEC WHERE C_WONUM=? AND C_ASSETATTRID like (?)";
         try {
             Connection con = ds.getConnection();
             if (con != null && !con.isClosed()) {

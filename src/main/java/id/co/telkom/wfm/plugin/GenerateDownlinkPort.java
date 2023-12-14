@@ -104,7 +104,7 @@ public class GenerateDownlinkPort extends Element implements PluginWebSupport {
                 if (listAttribute.getStatusCode() == 4001) {
                     JSONObject res = new JSONObject();
                     res.put("code", 422);
-                    res.put("message", "Device Not Found! " + downlinkPort);
+                    res.put("message", "Device Not Found!, <br> please check downlinkport ");
                     res.writeJSONString(hsr1.getWriter());
                 } else if (listAttribute.getStatusCode() == 4000) {
                     JSONObject res = new JSONObject();

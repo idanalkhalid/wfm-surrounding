@@ -7,6 +7,7 @@ package id.co.telkom.wfm.plugin.dao;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import id.co.telkom.wfm.plugin.util.ValidateTaskAttribute;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
@@ -24,6 +25,8 @@ import org.json.*;
  */
 public class CheckACSDao {
 
+    ValidateTaskAttribute functionAttribute = new ValidateTaskAttribute();
+    // list product
     String[] listProduct = {"Wifi Managed Service", "Wifi Managed Service Lite"};
 
     private String hitAcsApi(String wonum, String scid, String nteSN) throws MalformedURLException, IOException {
@@ -66,30 +69,6 @@ public class CheckACSDao {
             }
         }
         return responseJSON;
-    }
-
-    private String setStatus(String wonum) {
-        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-
-        String updateQuery = "UPDATE app_fd_workorder "
-                + "SET c_status = 'COMPWA' "
-                + "WHERE c_wonum = ? "
-                + "AND c_woclass = 'ACTIVITY' "
-                + "AND c_status = 'STARTWA'";
-        try (Connection con = ds.getConnection();
-                PreparedStatement ps = con.prepareStatement(updateQuery)) {
-
-            ps.setString(1, wonum);
-            int exe = ps.executeUpdate();
-
-            if (exe > 0) {
-                return "Update task status berhasil";
-            } else {
-                return "Update task gagal";
-            }
-        } catch (Exception e) {
-            return "Error: " + e.getMessage();
-        }
     }
 
     private JSONObject getParams(String wonum) throws SQLException, JSONException {
@@ -148,7 +127,7 @@ public class CheckACSDao {
         JSONObject params = getParams(wonum);
         JSONObject attribute = getAttribute(params.getString("parent"));
         LogUtil.info(getClass().getName(), "Params" + params);
-
+        
         String detailActCode = params.getString("detailactcode");
         String productname = params.getString("productname");
         String status = params.getString("status");
@@ -169,9 +148,9 @@ public class CheckACSDao {
                                     .get("eaiStatus")
                                     .get("srcResponseCode").asText();
                             LogUtil.info(getClass().getName(), "Result Status : " + resultStatus);
-                            
+
                             if (resultStatus.equals("SUCCESS")) {
-                                setStatus(wonum);
+                                functionAttribute.setStatus(wonum);
                                 res.put("code", 200);
                                 res.put("infoStatus", "Status Task Updated To COMPWA");
                                 res.put("result", "Refresh/Reopen order to view the changes");
@@ -185,7 +164,7 @@ public class CheckACSDao {
                         }
                     }
                     break;
-                case "COMPWA" :
+                case "COMPWA":
                     res.put("infostatus", "Status Task Sudah COMPWA");
                     res.put("result", "Refesh/Reopen order to view the changes");
                     break;

@@ -62,6 +62,30 @@ public class GenerateImonTaskDao {
                 + "</soapenv:Envelope>";
         return request;
     }
+    
+    private String requestXML(String bandwidth, String odpName, String downlinkPortName, String downlinkPortID, String sto) {
+        StringBuilder xmlBuilder = new StringBuilder();
+        xmlBuilder.append("<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:soapenc=\"http://schemas.xmlsoap.org/soap/encoding/\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:tel=\"http://eaiesbretail.telkom.co.id:9121/telkom.sb.imon.ws:apiDeployer\">");
+        xmlBuilder.append("<soapenv:Header/>");
+        xmlBuilder.append("<soapenv:Body>");
+        xmlBuilder.append("<tel:createTask>");
+        xmlBuilder.append("<key>EpwvzxlvDpD$DtEtxptmmulJl</key>");
+        xmlBuilder.append("<Bandwidth>").append(bandwidth).append("</Bandwidth>");
+        xmlBuilder.append("<ServiceEndPointDeviceInformation>");
+        xmlBuilder.append("<Name>").append(odpName).append("</Name>");
+        xmlBuilder.append("<DownlinkPort>");
+        xmlBuilder.append("<name>").append(downlinkPortName).append("</name>");
+        xmlBuilder.append("<id>").append(downlinkPortID).append("</id>");
+        xmlBuilder.append("</DownlinkPort>");
+        xmlBuilder.append("<STO>").append(sto).append("</STO>");
+        xmlBuilder.append("</ServiceEndPointDeviceInformation>");
+        xmlBuilder.append("</ent:getAccessNodeDeviceRequest>");
+        xmlBuilder.append("</soapenv:Body>");
+        xmlBuilder.append("</soapenv:Envelope>");
+
+        String request = xmlBuilder.toString();
+        return request;
+    }
 
     private Map<String, String> getSoapResponse(String[] requestAttributes) throws MalformedURLException, IOException, JSONException {
         String request = createSoapRequest(requestAttributes);
@@ -106,7 +130,6 @@ public class GenerateImonTaskDao {
         responseKafka.IntegrationHistory(kafkaRes);
         LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
         
-//        Map<String, String> responseDict = new HashMap<>();
         Map<String, String> responseDict = new HashMap<>();
         if (!status.isEmpty() && !message.isEmpty()) {
             if (status.equals("F")) {

@@ -5,8 +5,9 @@
  */
 package id.co.telkom.wfm.plugin.dao;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import id.co.telkom.wfm.plugin.GenerateDownlinkPort;
-import id.co.telkom.wfm.plugin.kafka.ResponseKafka;
 import id.co.telkom.wfm.plugin.model.*;
 import id.co.telkom.wfm.plugin.util.*;
 import java.io.IOException;
@@ -23,18 +24,17 @@ import org.json.*;
 public class GenerateDownlinkPortDao {
 
     TimeUtil time = new TimeUtil();
-    FormatLogIntegrationHistory insertIntegrationHistory = new FormatLogIntegrationHistory();
-    ResponseKafka responseKafka = new ResponseKafka();
+    InsertIntegrationHistory insertHistory = new InsertIntegrationHistory();
     ConnUtil connUtil = new ConnUtil();
     APIConfig apiConfig = new APIConfig();
     ValidateTaskAttribute functionAttribute = new ValidateTaskAttribute();
+    CallUIM callUIM = new CallUIM();
 
     public String formatRequest(String wonum, ListGenerateAttributes listGenerate) throws SQLException, JSONException {
-//        JSONObject result = new JSONObject();
+
         String result = "";
         try {
 
-//            JSONObject assetAttributes = getAssetattrid(wonum);
             JSONObject assetAttributes = functionAttribute.getValueAttribute(wonum, "c_assetattrid IN ('STP_NAME','STP_PORT_NAME', 'STP_PORT_ID', 'NTE_NAME', 'NTE_DOWNLINK_PORT', 'AN_STO')");
 
             String nteName = assetAttributes.optString("NTE_NAME");
@@ -57,9 +57,7 @@ public class GenerateDownlinkPortDao {
     }
 
     public String callGenerateDownlinkPort(String wonum, String bandwidth, String odpName, String downlinkPortName, String downlinkPortID, String sto, ListGenerateAttributes listGenerate) throws MalformedURLException, IOException, Throwable {
-        
         String message = "";
-        CallUIM callUIM = new CallUIM();
         try {
             String request = requestXML(bandwidth, odpName, downlinkPortName, downlinkPortID, sto);
 
@@ -67,87 +65,32 @@ public class GenerateDownlinkPortDao {
 
             //Parsing response data
             LogUtil.info(this.getClass().getName(), "############ Parsing Data Response ##############");
-            org.json.JSONObject envelope = temp.getJSONObject("env:Envelope").getJSONObject("env:Body");
-            org.json.JSONObject device = envelope.getJSONObject("ent:getAccessNodeDeviceResponse");
-            int statusCode = device.getInt("statusCode");
+
+            ObjectMapper objectMapper = new ObjectMapper();
+            JsonNode rootNode = objectMapper.readTree(temp.toString());
+            JsonNode accessDeviceInformation = rootNode
+                    .path("env:Envelope")
+                    .path("env:Body")
+                    .path("ent:getAccessNodeDeviceResponse");
+
+            int statusCode = accessDeviceInformation.path("statusCode").asInt();
+            String status = accessDeviceInformation.path("status").asText();
 
             apiConfig = connUtil.getApiParam("uim_dev");
-            String status = device.getString("status");
-
-            JSONObject formatResponse = insertIntegrationHistory.LogIntegrationHistory(wonum, "DOWNLINKPORT", apiConfig.getUrl(), status, request, temp.toString());
-            String kafkaRes = formatResponse.toString();
-            responseKafka.IntegrationHistory(kafkaRes);
-            LogUtil.info(getClass().getName(), "Kafka Res : " + kafkaRes);
+            insertHistory.insertHistory(wonum, "Generate_DownlinkPort", apiConfig.getUrl(), status, request, temp.toString());
 
             LogUtil.info(this.getClass().getName(), "StatusCode : " + statusCode);
 
             if (statusCode == 4001) {
                 LogUtil.info(this.getClass().getName(), "DownlinkPort Not found!");
                 listGenerate.setStatusCode(statusCode);
-                message = "DownlinkPort Not Found!";
+//                message = "DownlinkPort Not Found!";
                 functionAttribute.deleteTkDeviceattribute(wonum);
                 functionAttribute.insertToDeviceTable(wonum, "AN_DOWNLINK_PORTNAME", "None", "None");
                 functionAttribute.insertToDeviceTable(wonum, "AN_DOWNLINK_PORTID", "None", "None");
             } else if (statusCode == 4000) {
                 listGenerate.setStatusCode(statusCode);
-                JSONObject attribute = new JSONObject();
-                JSONObject getDeviceInformation = device.getJSONObject("AccessDeviceInformation");
-
-                String manufacture = getDeviceInformation.getString("Manufacturer");
-                String name = getDeviceInformation.getString("Name");
-                String model = getDeviceInformation.getString("Model");
-                String ipAddress = getDeviceInformation.getString("IPAddress");
-                String nmsIpaddress = getDeviceInformation.getString("NMSIPAddress");
-                String sTO = getDeviceInformation.getString("STO");
-                String id = getDeviceInformation.getString("Id");
-
-                // Clear data from table APP_FD_TK_DEVICEATTRIBUTE
-                functionAttribute.deleteTkDeviceattribute(wonum);
-                
-                functionAttribute.updateWO("app_fd_workorderspec", "c_value='"+id+"'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_DEVICE_ID'");
-                functionAttribute.updateWO("app_fd_workorderspec", "c_value='"+sTO+"'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_STO'");
-                functionAttribute.updateWO("app_fd_workorderspec", "c_value='"+ipAddress+"'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_IPADDRESS'");
-                functionAttribute.updateWO("app_fd_workorderspec", "c_value='"+nmsIpaddress+"'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_NMSIPADDRESS'");
-                functionAttribute.updateWO("app_fd_workorderspec", "c_value='"+name+"'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_NAME'");
-                functionAttribute.updateWO("app_fd_workorderspec", "c_value='"+manufacture+"'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_MANUFACTUR'");
-                functionAttribute.updateWO("app_fd_workorderspec", "c_value='"+model+"'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_MODEL'");
-//                updateAttributeValue(wonum, id, sTO, ipAddress, nmsIpaddress, name, manufacture, model);
-
-                Object downlinkPortObj = getDeviceInformation.get("DownlinkPort");
-                if (downlinkPortObj instanceof JSONObject) {
-                    JSONObject downlinkPort = (JSONObject) downlinkPortObj;
-                    LogUtil.info(this.getClass().getName(), "DownlinkPort :" + downlinkPort);
-
-                    String downlinkportName = downlinkPort.getString("name");
-                    String downlinkPortId = downlinkPort.getString("id");
-                    // set response attribute
-                    attribute.put("Downlink Port Name : ", downlinkportName);
-                    attribute.put("Downlink Port ID : ", downlinkPortId);
-                    // insert into tk_deviceattribute
-                    functionAttribute.insertToDeviceTable(wonum, "AN_DOWNLINK_PORTNAME", downlinkPortName, downlinkportName);
-                    functionAttribute.insertToDeviceTable(wonum, "AN_DOWNLINK_PORTID", downlinkportName, downlinkPortId);
-                } else if (downlinkPortObj instanceof JSONArray) {
-                    JSONArray downlinkPortArray = (JSONArray) downlinkPortObj;
-                    for (int i = 0; i < downlinkPortArray.length(); i++) {
-                        JSONObject hasil = downlinkPortArray.getJSONObject(i);
-
-                        String downlinkportName = hasil.getString("name");
-                        String downlinkPortId = hasil.getString("id");
-
-                        attribute.put("Downlink Port Name : ", downlinkportName);
-                        attribute.put("Downlink Port ID : ", downlinkPortId);
-
-                        functionAttribute.insertToDeviceTable(wonum, "AN_DOWNLINK_PORTNAME", downlinkPortName, downlinkportName);
-                        functionAttribute.insertToDeviceTable(wonum, "AN_DOWNLINK_PORTID", downlinkportName, downlinkPortId);
-                    }
-                }
-                message = "Manufactur : " + manufacture + " "
-                        + "Name : " + name + " "
-                        + "IPAddress : " + ipAddress + " "
-                        + "NMSIPAddress : " + nmsIpaddress + " "
-                        + "STO : " + sTO + " "
-                        + "ID : " + id + " "
-                        + "" + attribute + "";
+                handleDeviceFound(wonum, downlinkPortName, accessDeviceInformation);
             }
 
         } catch (Exception e) {
@@ -156,23 +99,74 @@ public class GenerateDownlinkPortDao {
         return message;
     }
 
+    private void handleDeviceFound(String wonum, String downlinkPortName, JsonNode rootNode) throws SQLException, Throwable {
+        functionAttribute.deleteTkDeviceattribute(wonum);
+
+        handleAccessDeviceInformation(wonum, rootNode);
+
+        JsonNode downlinkPortNode = rootNode
+                .path("AccessDeviceInformation")
+                .path("DownlinkPort");
+        handleDownlinkport(wonum, downlinkPortName, downlinkPortNode);
+
+    }
+
+    private String handleAccessDeviceInformation(String wonum, JsonNode accessDeviceInformation) throws Throwable {
+        String manufacture = accessDeviceInformation.path("Manufacturer").asText();
+        String name = accessDeviceInformation.path("Name").asText();
+        String model = accessDeviceInformation.path("Model").asText();
+        String ipAddress = accessDeviceInformation.path("IPAddress").asText();
+        String nmsIpaddress = accessDeviceInformation.path("NMSIPAddress").asText();
+        String sTO = accessDeviceInformation.path("STO").asText();
+        String id = accessDeviceInformation.path("Id").asText();
+
+        functionAttribute.updateWO("app_fd_workorderspec", "c_value='" + id + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_DEVICE_ID'");
+        functionAttribute.updateWO("app_fd_workorderspec", "c_value='" + sTO + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_STO'");
+        functionAttribute.updateWO("app_fd_workorderspec", "c_value='" + ipAddress + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_IPADDRESS'");
+        functionAttribute.updateWO("app_fd_workorderspec", "c_value='" + nmsIpaddress + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_NMSIPADDRESS'");
+        functionAttribute.updateWO("app_fd_workorderspec", "c_value='" + name + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_NAME'");
+        functionAttribute.updateWO("app_fd_workorderspec", "c_value='" + manufacture + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_MANUFACTUR'");
+        functionAttribute.updateWO("app_fd_workorderspec", "c_value='" + model + "'", "c_wonum = '" + wonum + "' AND c_assetattrid='AN_MODEL'");
+
+        String message = "Manufactur : " + manufacture + " "
+                + "Name : " + name + " "
+                + "IPAddress : " + ipAddress + " "
+                + "NMSIPAddress : " + nmsIpaddress + " "
+                + "STO : " + sTO + " "
+                + "ID : " + id + " ";
+        return message;
+    }
+
+    private void handleDownlinkport(String wonum, String downlinkPortName, JsonNode downlinkPort) throws Throwable {
+        for (JsonNode portNode : downlinkPort) {
+            String downlinkportName = portNode.path("name").asText();
+            String downlinkPortId = portNode.path("id").asText();
+
+            functionAttribute.insertToDeviceTable(wonum, "AN_DOWNLINK_PORTNAME", downlinkPortName, downlinkportName);
+            functionAttribute.insertToDeviceTable(wonum, "AN_DOWNLINK_PORTID", downlinkportName, downlinkPortId);
+        }
+    }
+
     private String requestXML(String bandwidth, String odpName, String downlinkPortName, String downlinkPortID, String sto) {
-        String request = "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:ent=\"http://xmlns.oracle.com/communications/inventory/webservice/enterpriseFeasibility\">\n"
-                + "   <soapenv:Header/>\n"
-                + "   <soapenv:Body>\n"
-                + "      <ent:getAccessNodeDeviceRequest>\n"
-                + "         <Bandwidth>" + bandwidth + "</Bandwidth>\n"
-                + "         <ServiceEndPointDeviceInformation>\n"
-                + "            <Name>" + odpName + "</Name>\n"
-                + "            <DownlinkPort>\n"
-                + "               <name>" + downlinkPortName + "</name>\n"
-                + "               <id>" + downlinkPortID + "</id>\n"
-                + "            </DownlinkPort>\n"
-                + "            <STO>" + sto + "</STO>\n"
-                + "         </ServiceEndPointDeviceInformation>\n"
-                + "      </ent:getAccessNodeDeviceRequest>\n"
-                + "   </soapenv:Body>\n"
-                + "</soapenv:Envelope>";
+        StringBuilder xmlBuilder = new StringBuilder();
+        xmlBuilder.append("<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:ent=\"http://xmlns.oracle.com/communications/inventory/webservice/enterpriseFeasibility\">");
+        xmlBuilder.append("<soapenv:Header/>");
+        xmlBuilder.append("<soapenv:Body>");
+        xmlBuilder.append("<ent:getAccessNodeDeviceRequest>");
+        xmlBuilder.append("<Bandwidth>").append(bandwidth).append("</Bandwidth>");
+        xmlBuilder.append("<ServiceEndPointDeviceInformation>");
+        xmlBuilder.append("<Name>").append(odpName).append("</Name>");
+        xmlBuilder.append("<DownlinkPort>");
+        xmlBuilder.append("<name>").append(downlinkPortName).append("</name>");
+        xmlBuilder.append("<id>").append(downlinkPortID).append("</id>");
+        xmlBuilder.append("</DownlinkPort>");
+        xmlBuilder.append("<STO>").append(sto).append("</STO>");
+        xmlBuilder.append("</ServiceEndPointDeviceInformation>");
+        xmlBuilder.append("</ent:getAccessNodeDeviceRequest>");
+        xmlBuilder.append("</soapenv:Body>");
+        xmlBuilder.append("</soapenv:Envelope>");
+
+        String request = xmlBuilder.toString();
         return request;
     }
 }

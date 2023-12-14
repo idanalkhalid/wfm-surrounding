@@ -5,9 +5,7 @@
  */
 package id.co.telkom.wfm.plugin;
 
-import id.co.telkom.wfm.plugin.dao.ValidateVrfDao;
-import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
-import id.co.telkom.wfm.plugin.util.ResponseAPI;
+import id.co.telkom.wfm.plugin.dao.GenerateSidNetmonkDao;
 import java.io.IOException;
 import java.util.Map;
 import javax.servlet.ServletException;
@@ -15,15 +13,14 @@ import javax.servlet.http.*;
 import org.joget.apps.form.model.*;
 import org.joget.commons.util.LogUtil;
 import org.joget.plugin.base.PluginWebSupport;
-import org.json.simple.JSONObject;
 
 /**
  *
  * @author ASUS
  */
-public class ValidateVrf extends Element implements PluginWebSupport {
+public class GenerateSidNetmonk extends Element implements PluginWebSupport {
 
-    String pluginName = "Telkom New WFM - Generate Validate VRF - Web Service";
+    String pluginName = "Telkom New WFM - Generate SID Netmonk - Web Service";
 
     @Override
     public String renderTemplate(FormData fd, Map map) {
@@ -62,40 +59,34 @@ public class ValidateVrf extends Element implements PluginWebSupport {
 
     @Override
     public void webService(HttpServletRequest hsr, HttpServletResponse hsr1) throws ServletException, IOException {
+        GenerateSidNetmonkDao dao = new GenerateSidNetmonkDao();
 
-        ValidateVrfDao dao = new ValidateVrfDao();
-        ResponseAPI responseTemplete = new ResponseAPI();
+        LogUtil.info(getClass().getName(), "Start Process: Generate SID Netmonk");
+        //  JSONObject res = new JSONObject();
 
-        //@@Start..
-        LogUtil.info(this.getClass().getName(), "############## START PROCESS VALIDATE VRF ###############");
-        ListGenerateAttributes listAttribute = new ListGenerateAttributes();
-        //@Authorization
-        if ("GET".equals(hsr.getMethod())) {
+        if ("POST".equals(hsr.getMethod())) {
             try {
+                org.json.simple.JSONObject res = new org.json.simple.JSONObject();
                 if (hsr.getParameterMap().containsKey("wonum")) {
                     String wonum = hsr.getParameter("wonum");
-                    org.json.JSONObject validateVrf = dao.callUimaxValidateVrf(wonum, listAttribute);
-                    JSONObject res = new JSONObject();
+                    LogUtil.info(getClassName(), "Wonum : " + wonum);
+                    String validate = dao.validateSIDNetmonk(wonum);
 
-                    if (listAttribute.getStatusCode() == 404) {
+                    if (validate.equals("Result_ID is already exists")) {
                         res.put("code", 422);
-                        res.put("data", validateVrf);
-                        res.writeJSONString(hsr1.getWriter());
-                    } else if (listAttribute.getStatusCode() == 200) {
-                        res.put("code", 200);
-                        res.put("data", validateVrf);
+                        res.put("message", validate);
                         res.writeJSONString(hsr1.getWriter());
                     } else {
-                        res.put("code", 404);
-                        res.put("message", "Call Failed");
+                        res.put("code", 200);
+                        res.put("message", validate);
                         res.writeJSONString(hsr1.getWriter());
-                        LogUtil.info(getClass().getName(), "Call Failed");
                     }
+                    LogUtil.info(getClassName(), "Response  : " + res);
                 }
             } catch (Exception e) {
                 LogUtil.error(getClassName(), e, "Trace Error Here : " + e.getMessage());
             }
-        } else if (!"GET".equals(hsr.getMethod())) {
+        } else if (!"POST".equals(hsr.getMethod())) {
             try {
                 hsr1.sendError(405, "Method Not Allowed");
             } catch (Exception e) {

@@ -27,14 +27,13 @@ import java.util.logging.Logger;
 public class GenerateStpNetLocDao {
 
     CallUIM callUIM = new CallUIM();
-    FormatLogIntegrationHistory insertIntegrationHistory = new FormatLogIntegrationHistory();
-    ResponseKafka responseKafka = new ResponseKafka();
+    InsertIntegrationHistory insertHistory = new InsertIntegrationHistory();
     ConnUtil connUtil = new ConnUtil();
     APIConfig apiConfig = new APIConfig();
     ValidateTaskAttribute functionAttribute = new ValidateTaskAttribute();
 
     /* Call API Surrounding Generate STP Net Loc */
-    public void callGenerateStpNetLoc(final String wonum, final ListGenerateAttributes listGenerate) throws JSONException, IOException, MalformedURLException, Exception, Throwable {
+    public void callGenerateStpNetLoc(final String wonum, ListGenerateAttributes listGenerate) throws JSONException, IOException, MalformedURLException, Exception, Throwable {
         apiConfig = connUtil.getApiParam("uim_dev");
         try {
             JSONObject assetattr = functionAttribute.getValueAttribute(wonum, "c_assetattrid IN ('LATITUDE', 'LONGITUDE')");
@@ -46,23 +45,28 @@ public class GenerateStpNetLocDao {
             JSONObject temp = callUIM.callUIM(request, "uim_dev");
             // Parsing response
             ObjectMapper objectMapper = new ObjectMapper();
-            final JsonNode rootNode = objectMapper.readTree(temp.toString());
+            JsonNode rootNode = objectMapper.readTree(temp.toString());
             // Mendapatkan statusCode
-            final int statusCode = rootNode
+            int statusCode = rootNode
                     .path("env:Envelope")
                     .path("env:Body")
                     .path("ent:findDeviceByCriteriaResponse")
                     .path("statusCode").asInt();
-
+            String status = rootNode
+                    .path("env:Envelope")
+                    .path("env:Body")
+                    .path("ent:findDeviceByCriteriaResponse")
+                    .path("status").asText();
+            // wonum, integrationType, api, status, request, response
+            insertHistory.insertHistory(wonum, "Generate_STP_NetLoc", apiConfig.getUrl(), status, request, temp.toString());
+            
             LogUtil.info(getClass().getName(), "Status Code : " + statusCode);
             listGenerate.setStatusCode(statusCode);
 
             if (statusCode == 4001) {
-                LogUtil.info(this.getClass().getName(), "No Device found.");
                 handleNoDeviceFound(wonum);
             } else if (statusCode == 4000) {
                 externalUpdateThread(wonum, rootNode);
-//                handleDeviceFound(wonum, rootNode);
             }
         } catch (Exception e) {
             LogUtil.error(this.getClass().getName(), e, "error : " + e.getMessage());
@@ -107,7 +111,6 @@ public class GenerateStpNetLocDao {
         String id = deviceInfoNode.path("id").asText();
         String specification = deviceInfoNode.path("specification").asText();
 
-        // ...
         functionAttribute.insertToDeviceTable(wonum, "STP_NETWORKLOCATION", "", networkLocation);
         functionAttribute.insertToDeviceTable(wonum, "STP_NAME", networkLocation, name);
         functionAttribute.insertToDeviceTable(wonum, "STP_SPECIFICATION", networkLocation, specification);

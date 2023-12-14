@@ -6,27 +6,20 @@
 package id.co.telkom.wfm.plugin;
 
 import id.co.telkom.wfm.plugin.dao.GenerateStpNetLocDao;
-import id.co.telkom.wfm.plugin.model.ListAttributes;
 import id.co.telkom.wfm.plugin.model.ListGenerateAttributes;
 import id.co.telkom.wfm.plugin.util.ResponseAPI;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.net.MalformedURLException;
-import java.sql.SQLException;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.logging.*;
 import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import org.joget.apps.form.model.Element;
-import org.joget.apps.form.model.FormData;
+import javax.servlet.http.*;
+import org.joget.apps.form.model.*;
 import org.joget.commons.util.LogUtil;
 import org.joget.plugin.base.PluginWebSupport;
-import org.json.JSONException;
 import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
-import org.json.simple.parser.ParseException;
+import org.json.simple.parser.*;
 
 /**
  *
@@ -105,25 +98,17 @@ public class GenerateStpNetLoc extends Element implements PluginWebSupport {
 
                 try {
                     LogUtil.info(getClassName(), "Call Generate STP Net Loc");
-                    LogUtil.info(getClassName(), "Status Code : " + listAttribute.getStatusCode());
-                    JSONObject res = new JSONObject();
 
                     dao.callGenerateStpNetLoc(wonum, listAttribute);
-                    
+
                     if (listAttribute.getStatusCode() == 4001) {
-                        res.put("code", 422);
-                        res.put("message", "Device Not Found!");
-                        res.writeJSONString(hsr1.getWriter());
+                        responseTemplete.genericResponseNoData(422, "Device Not Found!", JSONObject.class).writeJSONString(hsr1.getWriter());
                     } else if (listAttribute.getStatusCode() == 4000) {
-                        res.put("code", 200);
-                        res.put("message", "Device Found");
-                        res.writeJSONString(hsr1.getWriter());
+                        responseTemplete.genericResponseNoData(200, "Device Found!", JSONObject.class).writeJSONString(hsr1.getWriter());
                     } else {
-                        String message = "Call Failed";
-                        res = responseTemplete.getResponse(message, 404);
-                        res.writeJSONString(hsr1.getWriter());
+                        responseTemplete.failedResponse405("Call Failed").writeJSONString(hsr1.getWriter());
                     }
-                    
+
                 } catch (Exception ex) {
                     Logger.getLogger(GenerateStpNetLoc.class.getName()).log(Level.SEVERE, null, ex);
                 } catch (Throwable ex) {

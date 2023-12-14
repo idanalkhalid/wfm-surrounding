@@ -81,4 +81,10 @@ public class TimeUtil {
         return formattedDate;
     }
 
+    public Timestamp getTimestampWithMillis() {
+        ZonedDateTime zdt = ZonedDateTime.now(ZoneId.of("Asia/Jakarta"));
+        DateTimeFormatter format = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
+        Timestamp ts = Timestamp.valueOf(zdt.toLocalDateTime().format(format));
+        return ts;
+    }
 }

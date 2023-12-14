@@ -8,15 +8,15 @@ package id.co.telkom.wfm.plugin.dao;
 import com.fasterxml.jackson.databind.*;
 import id.co.telkom.wfm.plugin.model.APIConfig;
 import id.co.telkom.wfm.plugin.util.*;
-import java.sql.*;
-import org.joget.commons.util.*;
-import org.json.JSONException;
+import java.sql.SQLException;
+import org.joget.commons.util.LogUtil;
+import org.json.*;
 
 /**
  *
  * @author ASUS
  */
-public class GenerateSidConnectivityDao {
+public class GenerateSidNetmonkDao {
 
     CallUIM callUIM = new CallUIM();
     InsertIntegrationHistory insertHistory = new InsertIntegrationHistory();
@@ -40,14 +40,13 @@ public class GenerateSidConnectivityDao {
         return request;
     }
 
-    private String getSoapResponseSDWAN(String orderID, String wonum) throws Throwable {
+    private String getSoapResponseNetmonk(String orderID, String parent) {
         apiConfig = connUtil.getApiParam("uim_dev");
         String request = createRequest(orderID);
-        String id = "";
-        String name = "";
+        String serviceId = "";
         try {
             // call UIM
-            org.json.JSONObject temp = callUIM.callUIM(request, "uim_dev");
+            JSONObject temp = callUIM.callUIM(request, "uim_dev");
             // Parsing response
             ObjectMapper objectMapper = new ObjectMapper();
             JsonNode rootNode = objectMapper.readTree(temp.toString());
@@ -59,50 +58,52 @@ public class GenerateSidConnectivityDao {
             String status = findServiceByOrderResponse.path("status").asText();
 
             if (statusCode == 404) {
-                LogUtil.info(getClass().getName(), "SID Not Found");
+                LogUtil.info(getClass().getName(), "Service Not Found");
             } else if (statusCode == 200) {
                 JsonNode serviceInfo = findServiceByOrderResponse.path("ServiceInfo");
-                id = serviceInfo.path("id").asText();
-                name = serviceInfo.path("name").asText();
+                serviceId = serviceInfo.path("id").asText();
 
-                if (!id.isEmpty() && !name.isEmpty()) {
-                    functionAttribute.deleteTkDeviceattribute(wonum);
-                    functionAttribute.insertToDeviceTable(wonum, name, "", id);
+                if (!serviceId.isEmpty()) {
+                    functionAttribute.updateWO("app_fd_workorderattribute", "Service_ID = '" + serviceId + "'", "c_wonum = '" + parent + "'");
                 }
             } else {
                 LogUtil.info(getClass().getName(), "Error here");
             }
             //wonum, integrationType, api, status, request, response
-            insertHistory.insertHistory(wonum, "getSID", apiConfig.getUrl(), status, request, temp.toString());
+            insertHistory.insertHistory(parent, "getSIDNetmonk", apiConfig.getUrl(), status, request, temp.toString());
 
         } catch (Exception e) {
             LogUtil.error(getClass().getName(), e, "Call Failed." + e);
         }
-        return null;
+        return serviceId;
     }
-    
-    public String validateSIDConnectivity(String wonum) throws SQLException, JSONException, Throwable {
-        String resultID = "";
+
+    public String validateSIDNetmonk(String parent) throws SQLException, JSONException {
         String result = "";
-        org.json.JSONObject attribute = functionAttribute.getWOAttribute(wonum);
+        JSONObject attribute = functionAttribute.getParamWO(parent);
+        String flagND = functionAttribute.getWoAttrValue(parent, "ND");
+        String serviceID = functionAttribute.getWoAttrValue(parent.toString(), "Service_ID");
         String productname = attribute.get("productname").toString();
-        String detailactcode = attribute.get("detailactcode").toString();
         String scorderno = attribute.get("scorderno").toString();
+        String crmordertype = attribute.get("crmordertype").toString();
         String[] splitscorder = scorderno.split("_");
         String orderid = splitscorder[0];
 
-        LogUtil.info(getClass().getName(), "Productname : " + productname + " Detailactcode : " + detailactcode + " SCOrderNo : " + scorderno);
-        LogUtil.info(getClass().getName(), "OrderID : " + orderid);
+        LogUtil.info(getClass().getName(), "ND : " + flagND + " Service_ID : " + serviceID);
+        LogUtil.info(getClass().getName(), "productname : " + productname + " scorderno : " + scorderno + " crmordertype : " + crmordertype);
+        LogUtil.info(getClass().getName(), "orderid : " + orderid);
 
-        if (productname.equals("SDWAN") && detailactcode.equals("WFMNonCore Review Order TSQ SDWAN")) {
-            resultID = getSoapResponseSDWAN(wonum, orderid);
-            if (resultID == null) {
-                result = "Get SID Connectivity Failed.";
+        if (productname.equals("Nadeefa Netmonk") && crmordertype.equals("New Install") && flagND.equalsIgnoreCase("")) {
+            String ServiceID = serviceID;
+            if (ServiceID == null) {
+                String resultSID = getSoapResponseNetmonk(orderid, parent);
+                result = "get SID Connectivity Successfully, this is your SID : " + resultSID;
+                if (resultSID.isEmpty()) {
+                    result = "Get SID Connectivity Failed";
+                }
             } else {
-                result = "Refresh/Reopen order to view the changes.";
+                result = "Result_ID is already exists";
             }
-        } else {
-            result = "Ooops Sorry, this product is not an SDWAN product";
         }
         LogUtil.info(getClass().getName(), "result : " + result);
         return result;

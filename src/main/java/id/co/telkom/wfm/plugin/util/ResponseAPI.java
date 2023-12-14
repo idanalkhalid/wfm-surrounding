@@ -5,6 +5,7 @@
  */
 package id.co.telkom.wfm.plugin.util;
 
+import org.json.JSONException;
 import org.json.simple.JSONObject;
 
 /**
@@ -12,23 +13,39 @@ import org.json.simple.JSONObject;
  * @author ASUS
  */
 public class ResponseAPI {
-    public JSONObject getSuccessResp(String wonum, String status, String message) {
-        //Create response
-        JSONObject data = new JSONObject();
-        data.put("wonum", wonum);
-        data.put("status", status);
-        JSONObject res = new JSONObject(); 
-        res.put("code", 200);
-        res.put("message", message);
-        res.put("data", data);
-        return res;
+
+    JSONObject respObj = new JSONObject();
+
+    public <T> T genericResponse(int statusCode, String dataKey, Object dataValue, String message, Class<T> returnType) throws JSONException {
+        
+        respObj.put("status", statusCode);
+        respObj.put("message", message);
+        respObj.put(dataKey, dataValue);
+
+        try {
+            return returnType.cast(respObj);
+        } catch (ClassCastException e) {
+            return null;
+        }
     }
-    
-    public JSONObject getResponse(String message, int errorCode) {
-        //Create response
-        JSONObject res = new JSONObject(); 
-        res.put("code", errorCode);
-        res.put("message", message);
-        return res;
+
+    public <T> T genericResponseNoData(int statusCode, String message, Class<T> returnType) throws JSONException {
+       
+        respObj.put("status", statusCode);
+        respObj.put("message", message);
+
+        try {
+            return returnType.cast(respObj);
+        } catch (ClassCastException e) {
+            return null;
+        }
     }
+
+    public JSONObject failedResponse405(String message) throws JSONException {
+
+        respObj.put("status", 404);
+        respObj.put("message", message);
+        return respObj;
+    }
+
 }
