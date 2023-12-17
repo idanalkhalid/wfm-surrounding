@@ -102,7 +102,7 @@ public class GenerateSidNetmonkDao {
                     result = "Get SID Connectivity Failed";
                 }
             } else {
-                result = "Result_ID is already exists";
+                result = "Service_ID is already exists";
             }
         }
         LogUtil.info(getClass().getName(), "result : " + result);
