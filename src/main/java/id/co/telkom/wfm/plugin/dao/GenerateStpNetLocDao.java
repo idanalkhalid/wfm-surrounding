@@ -5,7 +5,6 @@
  */
 package id.co.telkom.wfm.plugin.dao;
 
-import id.co.telkom.wfm.plugin.kafka.ResponseKafka;
 import id.co.telkom.wfm.plugin.model.*;
 import id.co.telkom.wfm.plugin.util.*;
 import java.io.*;
@@ -26,7 +25,7 @@ import java.util.logging.Logger;
  */
 public class GenerateStpNetLocDao {
 
-    CallUIM callUIM = new CallUIM();
+    CallXML callUIM = new CallXML();
     InsertIntegrationHistory insertHistory = new InsertIntegrationHistory();
     ConnUtil connUtil = new ConnUtil();
     APIConfig apiConfig = new APIConfig();
@@ -47,19 +46,15 @@ public class GenerateStpNetLocDao {
             ObjectMapper objectMapper = new ObjectMapper();
             JsonNode rootNode = objectMapper.readTree(temp.toString());
             // Mendapatkan statusCode
-            int statusCode = rootNode
+            JsonNode attrNode = rootNode
                     .path("env:Envelope")
                     .path("env:Body")
-                    .path("ent:findDeviceByCriteriaResponse")
-                    .path("statusCode").asInt();
-            String status = rootNode
-                    .path("env:Envelope")
-                    .path("env:Body")
-                    .path("ent:findDeviceByCriteriaResponse")
-                    .path("status").asText();
+                    .path("ent:findDeviceByCriteriaResponse");
+            int statusCode = attrNode.path("statusCode").asInt();
+            String status = attrNode.path("status").asText();
             // wonum, integrationType, api, status, request, response
             insertHistory.insertHistory(wonum, "Generate_STP_NetLoc", apiConfig.getUrl(), status, request, temp.toString());
-            
+
             LogUtil.info(getClass().getName(), "Status Code : " + statusCode);
             listGenerate.setStatusCode(statusCode);
 

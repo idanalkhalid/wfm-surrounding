@@ -28,7 +28,7 @@ public class GenerateDownlinkPortDao {
     ConnUtil connUtil = new ConnUtil();
     APIConfig apiConfig = new APIConfig();
     ValidateTaskAttribute functionAttribute = new ValidateTaskAttribute();
-    CallUIM callUIM = new CallUIM();
+    CallXML callUIM = new CallXML();
 
     public String formatRequest(String wonum, ListGenerateAttributes listGenerate) throws SQLException, JSONException {
 

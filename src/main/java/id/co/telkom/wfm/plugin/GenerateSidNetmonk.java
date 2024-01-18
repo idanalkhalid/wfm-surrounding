@@ -72,7 +72,7 @@ public class GenerateSidNetmonk extends Element implements PluginWebSupport {
                     LogUtil.info(getClassName(), "Wonum : " + wonum);
                     String validate = dao.validateSIDNetmonk(wonum);
 
-                    if (validate.equals("Result_ID is already exists")) {
+                    if (validate.equals("Result_ID is already exists") || validate.equals("Sorry this product is not Netmonk products")) {
                         res.put("code", 422);
                         res.put("message", validate);
                         res.writeJSONString(hsr1.getWriter());

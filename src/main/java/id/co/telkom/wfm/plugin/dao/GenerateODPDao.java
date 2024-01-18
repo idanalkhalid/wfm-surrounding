@@ -5,7 +5,7 @@
  */
 package id.co.telkom.wfm.plugin.dao;
 
-import id.co.telkom.wfm.plugin.util.CallUIM;
+import id.co.telkom.wfm.plugin.util.CallXML;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.sql.Connection;
@@ -26,7 +26,7 @@ import org.json.JSONObject;
  */
 public class GenerateODPDao {
 
-    CallUIM callUIM = new CallUIM();
+    CallXML callUIM = new CallXML();
 
     private void insertToDeviceTable(String wonum, String name, String type, String description) throws Throwable {
         // Generate UUID

@@ -5,14 +5,10 @@
  */
 package id.co.telkom.wfm.plugin.util;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import javax.sql.DataSource;
 import org.joget.apps.app.service.AppUtil;
-import org.joget.commons.util.LogUtil;
-import org.joget.commons.util.UuidGenerator;
+import org.joget.commons.util.*;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -124,7 +120,7 @@ public class ValidateTaskAttribute {
     public JSONObject getWOAttribute(String wonum) throws SQLException, JSONException {
         JSONObject attributes = new JSONObject();
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String query = "SELECT wo2.c_wonum, wo2.c_parent, wo1.c_scorderno, wo1.c_productname,wo2.c_detailactcode "
+        String query = "SELECT wo1.c_customer_name, wo2.c_wonum, wo2.c_parent, wo1.c_scorderno, wo1.c_productname,wo2.c_detailactcode "
                 + "FROM app_fd_workorder wo1 "
                 + "JOIN app_fd_workorder wo2 ON wo1.c_wonum = wo2.c_parent "
                 + "WHERE wo1.c_woclass = 'WORKORDER' "
@@ -138,6 +134,7 @@ public class ValidateTaskAttribute {
                 attributes.put("parent", rs.getString("c_parent"));
                 attributes.put("productname", rs.getString("c_productname"));
                 attributes.put("scorderno", rs.getString("c_scorderno"));
+                attributes.put("customername", rs.getString("c_customer_name"));
                 LogUtil.info(getClass().getName(), "Activity: " + attributes);
             }
         } catch (SQLException e) {
@@ -170,6 +167,52 @@ public class ValidateTaskAttribute {
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
                 resultObj.put("value", "C_ATTR_VALUE");
+            }
+        } catch (SQLException e) {
+            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
+        } finally {
+            ds.getConnection().close();
+        }
+        return resultObj;
+    }
+
+    public JSONObject getWoAttribute(String parent, String condition) throws JSONException, SQLException {
+        JSONObject resultObj = new JSONObject();
+        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
+        String query = "SELECT C_ATTR_NAME, C_ATTR_VALUE FROM APP_FD_WORKORDERATTRIBUTE "
+                + "WHERE C_WONUM = ? AND " + condition + "";
+        try (Connection con = ds.getConnection();
+                PreparedStatement ps = con.prepareStatement(query)) {
+            ps.setString(1, parent);
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                resultObj.put(rs.getString("C_ATTR_NAME"), rs.getString("C_ATTR_VALUE") == null ? "" : rs.getString("C_ATTR_VALUE"));
+            }
+        } catch (SQLException e) {
+            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
+        } finally {
+            ds.getConnection().close();
+        }
+        return resultObj;
+    }
+
+    public String  getValueSpecOtherTask(String parent, String assetattrid, String detailactcode) throws JSONException, SQLException {
+        String resultObj = "";
+        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
+        String query = "SELECT C_VALUE FROM APP_FD_WORKORDERSPEC WHERE C_WONUM = (\n"
+                + "    SELECT C_WONUM FROM APP_FD_WORKORDER \n"
+                + "    WHERE C_PARENT = ? \n"
+                + "    AND C_DETAILACTCODE = ? \n"
+                + "    AND C_WFMDOCTYPE = 'NEW')\n"
+                + "AND C_ASSETATTRID = ?";
+        try (Connection con = ds.getConnection();
+                PreparedStatement ps = con.prepareStatement(query)) {
+            ps.setString(1, parent);
+            ps.setString(2, detailactcode);
+            ps.setString(3, assetattrid);
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                resultObj = rs.getString("C_VALUE") == null ? "" : rs.getString("C_VALUE");
             }
         } catch (SQLException e) {
             LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
@@ -272,7 +315,7 @@ public class ValidateTaskAttribute {
         }
         return value;
     }
-    
+
     public JSONObject getParamWO(String parent) throws SQLException, JSONException {
         JSONObject attributes = new JSONObject();
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");

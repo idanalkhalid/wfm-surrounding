@@ -32,6 +32,11 @@ public class Activator implements BundleActivator {
         registrationList.add(context.registerService(ShowCommand.class.getName(), new ShowCommand(), null));
         registrationList.add(context.registerService(GenerateODP.class.getName(), new GenerateODP(), null));
         registrationList.add(context.registerService(GenerateSidNetmonk.class.getName(), new GenerateSidNetmonk(), null));
+        registrationList.add(context.registerService(ReservationIDC.class.getName(), new ReservationIDC(), null));
+        registrationList.add(context.registerService(ActivationPowerIDC.class.getName(), new ActivationPowerIDC(), null));
+        registrationList.add(context.registerService(IDCCompleteConnectivity.class.getName(), new IDCCompleteConnectivity(), null));
+        registrationList.add(context.registerService(FeasibilityCNDC.class.getName(), new FeasibilityCNDC(), null));
+        registrationList.add(context.registerService(RollbackTaskStatus.class.getName(), new RollbackTaskStatus(), null));
         //Register plugin here
         //registrationList.add(context.registerService(MyPlugin.class.getName(), new MyPlugin(), null));
     }
