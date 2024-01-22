@@ -24,7 +24,7 @@ public class GenerateIpV4Dao {
 
     ListGenerateAttributes listAttribute = new ListGenerateAttributes();
     ValidateTaskAttribute functionAttribute = new ValidateTaskAttribute();
-    CallUIM callUIM = new CallUIM();
+    CallXML callUIM = new CallXML();
 
     String[] listProductname = {"VPN IP Global", "VPN", "VPN IP Bisnis Paket Gold"};
     String[] listPackageName = {"IP Transit Bedabandwidth", "IP Transit Beda bandwidth"};

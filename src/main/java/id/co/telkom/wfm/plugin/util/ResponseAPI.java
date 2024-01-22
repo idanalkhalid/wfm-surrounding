@@ -5,6 +5,9 @@
  */
 package id.co.telkom.wfm.plugin.util;
 
+
+import java.util.concurrent.TimeUnit;
+import okhttp3.OkHttpClient;
 import org.json.JSONException;
 import org.json.simple.JSONObject;
 
@@ -16,8 +19,13 @@ public class ResponseAPI {
 
     JSONObject respObj = new JSONObject();
 
+    private final OkHttpClient httpClient = (new OkHttpClient()).newBuilder()
+            .connectTimeout(10L, TimeUnit.SECONDS)
+            .readTimeout(30L, TimeUnit.SECONDS)
+            .build();
+
     public <T> T genericResponse(int statusCode, String dataKey, Object dataValue, String message, Class<T> returnType) throws JSONException {
-        
+
         respObj.put("status", statusCode);
         respObj.put("message", message);
         respObj.put(dataKey, dataValue);
@@ -30,7 +38,7 @@ public class ResponseAPI {
     }
 
     public <T> T genericResponseNoData(int statusCode, String message, Class<T> returnType) throws JSONException {
-       
+
         respObj.put("status", statusCode);
         respObj.put("message", message);
 
@@ -48,4 +56,5 @@ public class ResponseAPI {
         return respObj;
     }
 
+   
 }

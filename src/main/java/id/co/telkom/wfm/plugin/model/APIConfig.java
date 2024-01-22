@@ -11,17 +11,11 @@ package id.co.telkom.wfm.plugin.model;
 public class APIConfig {
 
     private String url;
-
     private String apiToken;
-
     private String apiId;
-
     private String apiKey;
-
     private String clientId;
-
     private String clientSecret;
-
     private String grantType;
 
     public String getClientId() {

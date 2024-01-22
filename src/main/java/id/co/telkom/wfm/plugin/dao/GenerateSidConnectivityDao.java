@@ -18,7 +18,7 @@ import org.json.JSONException;
  */
 public class GenerateSidConnectivityDao {
 
-    CallUIM callUIM = new CallUIM();
+    CallXML callUIM = new CallXML();
     InsertIntegrationHistory insertHistory = new InsertIntegrationHistory();
     ConnUtil connUtil = new ConnUtil();
     APIConfig apiConfig = new APIConfig();

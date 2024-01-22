@@ -5,18 +5,14 @@
  */
 package id.co.telkom.wfm.plugin.dao;
 
-import id.co.telkom.wfm.plugin.util.CallUIM;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import com.fasterxml.jackson.databind.*;
+import id.co.telkom.wfm.plugin.util.*;
+import java.sql.*;
 import java.util.Arrays;
 import javax.sql.DataSource;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.commons.util.LogUtil;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
+import org.json.*;
 
 /**
  *
@@ -24,7 +20,8 @@ import org.json.JSONObject;
  */
 public class UpdateEmailDao {
 
-    CallUIM deviceUtil = new CallUIM();
+    CallXML callXML = new CallXML();
+    ValidateTaskAttribute functionAttribute = new ValidateTaskAttribute();
 
     private void updateWoAttr(String parent, String value) throws SQLException {
         DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
@@ -74,41 +71,25 @@ public class UpdateEmailDao {
         }
         return resultObj;
     }
-    private JSONObject getParams(String wonum) throws JSONException, SQLException {
-        JSONObject resultObj = new JSONObject();
-        DataSource ds = (DataSource) AppUtil.getApplicationContext().getBean("setupDataSource");
-        String query = "SELECT C_PARENT, C_DETAILACTCODE FROM APP_FD_WORKORDER\n"
-                + "WHERE C_WONUM = ? ";
-        try (Connection con = ds.getConnection();
-                PreparedStatement ps = con.prepareStatement(query)) {
-            ps.setString(1, wonum);
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) {
-                resultObj.put("parent", rs.getString("C_PARENT"));
-                resultObj.put("detailactcode", rs.getString("C_DETAILACTCODE"));
-            }
-        } catch (SQLException e) {
-            LogUtil.error(getClass().getName(), e, "Trace error here : " + e.getMessage());
-        } finally {
-            ds.getConnection().close();
-        }
-        return resultObj;
-    }
 
     private String createSoapRequest(String[] requestAttributes) {
-        String request = "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:tel=\"http://eaiesb.telkom.co.id:9121/telkom.nb.mytech.wsout:updateDataSDMC\">\n"
-                + "   <soapenv:Header/>\n"
-                + "   <soapenv:Body>\n"
-                + "      <tel:updateDataSDMC>\n"
-                + "         <indihomeId>" + requestAttributes[0] + "</indihomeId>\n"
-                + "         <oldEmail>" + requestAttributes[1] + "</oldEmail>\n"
-                + "         <packetId>" + requestAttributes[2] + "</packetId>\n"
-                + "         <transType>" + requestAttributes[3] + "</transType>\n"
-                + "         <custname>" + requestAttributes[4] + "</custname>\n"
-                + "         <noHP>" + requestAttributes[5] + "</noHP>\n"
-                + "      </tel:updateDataSDMCRequest>\n"
-                + "   </soapenv:Body>\n"
-                + "</soapenv:Envelope>";
+        StringBuilder xmlBuilder = new StringBuilder();
+        xmlBuilder.append("<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:tel=\"http://eaiesb.telkom.co.id:9121/telkom.nb.mytech.wsout:updateDataSDMC\">")
+                .append(" <soapenv:Header/>")
+                .append(" <soapenv:Body>")
+                .append(" <tel:updateDataSDMC>")
+                .append(" <indihomeId>").append(requestAttributes[0]).append("</indihomeId>")
+                .append(" <oldEmail>").append(requestAttributes[1]).append("</oldEmail>")
+                .append(" <packetId>").append(requestAttributes[2]).append("</packetId>")
+                .append(" <transType>").append(requestAttributes[3]).append("</transType>")
+                .append(" <custname>").append(requestAttributes[4]).append("</custname>")
+                .append(" <noHP>").append(requestAttributes[5]).append("</noHP>")
+                .append(" </tel:updateDataSDMC>")
+                .append(" </soapenv:Body>")
+                .append(" </soapenv:Envelope>");
+
+        String request = xmlBuilder.toString();
+
         return request;
     }
 
@@ -116,28 +97,35 @@ public class UpdateEmailDao {
         String request = createSoapRequest(requestAttributes);
         JSONObject attribute = new JSONObject();
         try {
-            org.json.JSONObject temp = deviceUtil.callEAI(request);
+            org.json.JSONObject temp = callXML.callUIM(request, "update_email");
             LogUtil.info(getClass().getName(), "Response : " + temp.toString());
-
-            JSONObject envelope = temp.getJSONObject("env:Envelope").getJSONObject("env:Body");
+            
+            ObjectMapper jsonObj = new ObjectMapper();
+            
+            JsonNode rootNode = jsonObj.readTree(temp.toString());
+            JsonNode root = rootNode
+                    .path("env:Envelope")
+                    .path("env:Body");
+                    
 //            JSONObject findServiceOrder = envelope.getJSONObject("tel:findServiceByOrderResponse");
-            attribute.put("code", envelope.getString("statusCode"));
-            attribute.put("messages", envelope.getString("messages"));
-            attribute.put("email", envelope.getString("newEmail"));
+            attribute.put("code", root.path("statusCode").asInt());
+            attribute.put("messages", root.path("message").asText());
+            attribute.put("email", root.path("newEmail").asText());
 
         } catch (Exception e) {
             LogUtil.error(getClass().getName(), e, "Call Failed." + e);
         }
         return attribute;
     }
-    
+
     public String updateEmail(String wonum) throws JSONException, SQLException {
-        JSONObject param = getParams(wonum); 
+//        JSONObject param = getParams(wonum);
+        JSONObject param = functionAttribute.getWOAttribute(wonum);
         String parent = param.optString("parent");
         String detailactcode = param.optString("detailactcode");
-        String[] listDetailactcode = {"Deactivate_AndroidTV","Activate_AndroidTV"};
+        String[] listDetailactcode = {"Deactivate_AndroidTV", "Activate_AndroidTV"};
         String msg = "";
-        
+
         if (Arrays.asList(listDetailactcode).contains(detailactcode)) {
             JSONObject attributes = getWorkorderAttribute(parent);
             String custname = attributes.optString("custname");
@@ -146,14 +134,14 @@ public class UpdateEmailDao {
             String packetId = attributes.optString("packetId");
             String transType = attributes.optString("transType");
             String noHP = attributes.optString("gsm");
-            
-            String[] requestAttributes = {indihomeId,oldEmail,packetId,transType,custname,noHP};
+
+            String[] requestAttributes = {indihomeId, oldEmail, packetId, transType, custname, noHP};
             JSONObject responseCall = getSoapResponse(requestAttributes);
-            
+
             String status = responseCall.getString("code");
             String message = responseCall.getString("messages");
             if (status.equals("F")) {
-                msg = "Unable to update email, the error message is : "+message;
+                msg = "Unable to update email, the error message is : " + message;
             } else if (status.equals("T")) {
                 String newEmail = responseCall.optString("email");
                 updateWoAttr(parent, newEmail);

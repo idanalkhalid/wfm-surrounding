@@ -18,7 +18,7 @@ import org.json.*;
  */
 public class GenerateSidNetmonkDao {
 
-    CallUIM callUIM = new CallUIM();
+    CallXML callUIM = new CallXML();
     InsertIntegrationHistory insertHistory = new InsertIntegrationHistory();
     ConnUtil connUtil = new ConnUtil();
     APIConfig apiConfig = new APIConfig();
@@ -97,13 +97,16 @@ public class GenerateSidNetmonkDao {
             String ServiceID = serviceID;
             if (ServiceID == null) {
                 String resultSID = getSoapResponseNetmonk(orderid, parent);
-                result = "get SID Connectivity Successfully, this is your SID : " + resultSID;
                 if (resultSID.isEmpty()) {
-                    result = "Get SID Connectivity Failed";
+                    result = "Get SID Connectivity Failed, SID is empty";
+                } else {
+                    result = "get SID Netmonk Successfully, this is your SID : " + resultSID;
                 }
             } else {
                 result = "Service_ID is already exists";
             }
+        } else {
+            result = "Sorry this product is not Netmonk products";
         }
         LogUtil.info(getClass().getName(), "result : " + result);
         return result;
